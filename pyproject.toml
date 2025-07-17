@@ -1,0 +1,30 @@
+[project]
+name = "PyExner"
+version = "0.1.0"
+description = "High-performance 2D SWE–Exner solver with JAX and distributed GPU support"
+authors = [
+    {name = "Johansell Villalobos", email = "johansellvilla@gmail.com"}
+]
+license = {text = "BSD 3"}
+readme = "README.md"
+requires-python = ">=3.9"
+
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "pyyaml",
+    "netCDF4",             # Optional I/O
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "mypy",
+]
+cpu = ["jax[cpu]>=0.4.20"]
+cuda12 = ["jax[cuda12]>=0.4.20"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
