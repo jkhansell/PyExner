@@ -1,16 +1,34 @@
 
 import jax
 import jax.numpy as jnp
+from functools import partial
 
 #local imports
 from PyExner.state.roe_state import RoeState
 from PyExner.utils.constants import g, DRY_TOL, VEL_TOL
 
+@jax.jit
+def compute_masked_dt(state: RoeState, mask: jnp.ndarray, dx: float):
+    h = jnp.where(mask, state.h, 0.0)
+    hu = jnp.where(mask, state.hu, 0.0)
+    hv = jnp.where(mask, state.hv, 0.0)
+
+    u = hu / (h + DRY_TOL)
+    v = hv / (h + DRY_TOL)
+    c = jnp.sqrt(g * h)
+
+    dt_x = jnp.where(mask, dx / (jnp.abs(u) + c + VEL_TOL), jnp.inf)
+    dt_y = jnp.where(mask, dx / (jnp.abs(v) + c + VEL_TOL), jnp.inf)
+
+    dt = jnp.minimum(jnp.min(dt_x), jnp.min(dt_y))
+    return dt
+
 
 @jax.jit
 def compute_dt(state: RoeState, dx: float):
-
-    h, hu, hv = state.h, state.hu, state.hv
+    h = jnp.where(state.h > DRY_TOL, state.h, 0.0)
+    hv = jnp.where(state.h > DRY_TOL, state.hv, 0.0)
+    hu = jnp.where(state.h > DRY_TOL, state.hu, 0.0)
 
     u = hu / (h + DRY_TOL)
     v = hv / (h + DRY_TOL)
@@ -19,7 +37,7 @@ def compute_dt(state: RoeState, dx: float):
     dt_x = jnp.min(dx / (jnp.abs(u) + c + VEL_TOL))
     dt_y = jnp.min(dx / (jnp.abs(v) + c + VEL_TOL))
 
-    dt = jnp.minimum(dt_x, dt_y)
+    dt = jnp.minimum(jnp.min(dt_x), jnp.min(dt_y))
     return dt
 
 @jax.jit
@@ -72,8 +90,8 @@ def roe_solver(si: RoeState, sj: RoeState, nx: float, ny: float, dx: float):
 
     mask_i = (ei < 0.0) & (ej > 0.0)
 
-    lambda_1 = jnp.where(mask_i, ei*(ej-lambda_1)/((ej-ei)+1e-12), lambda_1) # Replace with Lambda hat
-    lambda_E1 = jnp.where(mask_i, lambda_1 - ei*(ej-lambda_1)/((ej-ei)+1e-12), 0.0)
+    lambda_1 = jnp.where(mask_i, ei*(ej-lambda_1)/((ej-ei)+VEL_TOL), lambda_1) # Replace with Lambda hat
+    lambda_E1 = jnp.where(mask_i, lambda_1 - ei*(ej-lambda_1)/((ej-ei)+VEL_TOL), 0.0)
     
     # lambda_3
     ei = uhati + jnp.sqrt(g*hi)
@@ -81,8 +99,8 @@ def roe_solver(si: RoeState, sj: RoeState, nx: float, ny: float, dx: float):
 
     mask_j = (ei < 0.0) & (ej > 0.0)
     
-    lambda_3 = jnp.where(mask_j, ej*(lambda_3-ei)/((ej-ei)+1e-12), lambda_3)      # Replace with Lambda hat
-    lambda_E3 = jnp.where(mask_j, lambda_3 - ej*(lambda_3-ei)/((ej-ei)+1e-12), 0.0)
+    lambda_3 = jnp.where(mask_j, ej*(lambda_3-ei)/((ej-ei)+VEL_TOL), lambda_3)      # Replace with Lambda hat
+    lambda_E3 = jnp.where(mask_j, lambda_3 - ej*(lambda_3-ei)/((ej-ei)+VEL_TOL), 0.0)
 
     lambda_E2 = jnp.zeros_like(lambda_E3) 
     lambdas_E = jnp.stack([lambda_E1, lambda_E2, lambda_E3], axis=-1)
@@ -97,7 +115,7 @@ def roe_solver(si: RoeState, sj: RoeState, nx: float, ny: float, dx: float):
     ], axis=-2)
 
     # Construct the elements of the inner matrix (before factoring out 1/(2c))
-    denom = lambda_1-lambda_3
+    denom = lambda_1-lambda_3 + VEL_TOL
     
     P_inv = jnp.stack([
         jnp.stack([-lambda_3/denom,      jnp.ones_like(utilde)/denom,     jnp.zeros_like(utilde)], axis=-1),
@@ -167,11 +185,11 @@ def roe_solver(si: RoeState, sj: RoeState, nx: float, ny: float, dx: float):
 
     dt = dx / jnp.max(jnp.abs(lambdas), axis=2)
 
-    mask_1 = (h_i1star < 0.0) & (jnp.abs(hi) > 1e-12)
-    mask_2 = (h_j3star < 0.0) & (jnp.abs(hj) > 1e-12)
+    mask_1 = (h_i1star < 0.0) & (jnp.abs(hi) > VEL_TOL)
+    mask_2 = (h_j3star < 0.0) & (jnp.abs(hj) > VEL_TOL)
 
-    dt1star = (dx / 2*lambdas[...,0])*(hi/(hi-h_i1star + 1e-12)) 
-    dt3star = (dx / 2*lambdas[...,2])*(hj/(hj-h_j3star + 1e-12))
+    dt1star = (dx / 2*lambdas[...,0])*(hi/(hi-h_i1star + VEL_TOL)) 
+    dt3star = (dx / 2*lambdas[...,2])*(hj/(hj-h_j3star + VEL_TOL))
 
     mask = (h_i1star < 0.0) & (h_j3star > 0.0) & (dt1star < dt)  
     betas = betas.at[...,0].set(jnp.where(mask, jnp.where(-beta1min >= beta3min, beta1min, betas[...,0]), betas[...,0]))
@@ -241,8 +259,9 @@ def roe_solver(si: RoeState, sj: RoeState, nx: float, ny: float, dx: float):
 
     return upwP, upwM
 
-@jax.jit
-def roe_solve_2D(fluxes: jnp.array, state: RoeState, dx: float):
+@partial(jax.jit, static_argnums=(2,3))
+def roe_solve_2D(fluxes: jnp.ndarray, state: RoeState, pad_height: int, pad_width: int , dt: float, dx: float):
+
     h, hu, hv, z, n = state.h, state.hu, state.hv, state.z, state.n
 
     # X-direction interface slices (axis=1)
@@ -253,6 +272,7 @@ def roe_solve_2D(fluxes: jnp.array, state: RoeState, dx: float):
         z =   z[:,:-1], 
         n =   n[:,:-1]
     )
+
     s2_x = RoeState(
         h =   h[:, 1:], 
         hu = hu[:, 1:], 
@@ -269,6 +289,7 @@ def roe_solve_2D(fluxes: jnp.array, state: RoeState, dx: float):
         z =   z[:-1,:], 
         n =   n[:-1,:]
     )
+
     s2_y = RoeState(
         h =   h[1:, :], 
         hu = hu[1:, :], 
@@ -284,20 +305,27 @@ def roe_solve_2D(fluxes: jnp.array, state: RoeState, dx: float):
 
     fluxes = fluxes.at[:,:-1].add(upwM_x) 
     fluxes = fluxes.at[:, 1:].add(upwP_x) 
-    fluxes = fluxes.at[:-1,:].add(upwM_y) 
+    fluxes = fluxes.at[:-1,:].add(upwM_y)
     fluxes = fluxes.at[1:, :].add(upwP_y)
     
-    return fluxes
-
-@jax.jit
-def update_state(state: RoeState, fluxes : jnp.ndarray, dt: float, dx: float) -> RoeState:
     dh  = fluxes[..., 0]
     dhu = fluxes[..., 1]
     dhv = fluxes[..., 2]
 
-    h_new  = state.h  - dt * dh  / dx
+    h_new  = state.h - dt * dh  / dx
     hu_new = state.hu - dt * dhu / dx
     hv_new = state.hv - dt * dhv / dx
+
+    #Deal with boundary conditions due to padding SPMD
+
+    h_new = h_new.at[-pad_height:,:].set(jnp.expand_dims(h_new[-(pad_height+1),:],axis=0))
+    h_new = h_new.at[:,-pad_width:].set(jnp.expand_dims(h_new[:,-(pad_width+1)], axis=1))
+
+    hu_new = hu_new.at[-pad_height:,:].set(jnp.expand_dims(hu_new[-(pad_height+1),:], axis=0))
+    hu_new = hu_new.at[:,-pad_width:].set(jnp.expand_dims(hu_new[:,-(pad_width+1)], axis=1))
+
+    hv_new = hv_new.at[-pad_height:,:].set(jnp.expand_dims(hv_new[-(pad_height+1),:], axis=0))
+    hv_new = hv_new.at[:,-pad_width:].set(jnp.expand_dims(hv_new[:,-(pad_width+1)], axis=1))
 
     return RoeState(
         h=h_new,
@@ -306,3 +334,4 @@ def update_state(state: RoeState, fluxes : jnp.ndarray, dt: float, dx: float) ->
         z=state.z,    # unchanged
         n=state.n     # unchanged
     )
+

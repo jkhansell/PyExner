@@ -50,7 +50,7 @@ class BoundaryManager:
         self.boundary_handlers = []
         self.names = []
         self._initialize_boundaries()
-
+        
     def _initialize_boundaries(self):
         points = jnp.stack([self.X.ravel(), self.Y.ravel()], axis=-1)
 
@@ -105,8 +105,7 @@ class BoundaryManager:
                 print(f"[BoundaryManager] Exception occurred while creating boundary '{btype}': {e}")
                 traceback.print_exc()
                 raise
-
-
+        
     @partial(jax.jit, static_argnums=(0,))
     def apply(self, state, time):
         for handler in self.boundary_handlers:

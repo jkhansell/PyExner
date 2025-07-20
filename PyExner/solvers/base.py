@@ -35,12 +35,6 @@ class BaseSolver2D(ABC):
         """
         pass
 
-    @abstractmethod
-    def _compute_fluxes(self):
-        """
-        Compute numerical fluxes for conserved variables.
-        """
-        pass
 
     @abstractmethod
     def _compute_timestep(self, cfl):
@@ -50,10 +44,7 @@ class BaseSolver2D(ABC):
         pass
 
     @abstractmethod
-    def _update_state(self, fluxes, dt):
-        """
-        Apply flux divergence and source terms.
-        """
+    def _compute_new_state(self):
         pass
 
     @abstractmethod
@@ -62,11 +53,13 @@ class BaseSolver2D(ABC):
         Apply boundary conditions
         """
         pass
+
+    @abstractmethod
     def get_state(self):
         """
         Return the current simulation state.
         """
-        return 
+        pass
 
 
     def exchange_halos(self):
