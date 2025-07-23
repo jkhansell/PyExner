@@ -61,7 +61,8 @@ def pad_with_mask(arr, shard_dims):
 
 class ParallelMesh2D:
     def __init__(self, params):
-        visible_devices = [int(gpu) for gpu in os.environ['CUDA_VISIBLE_DEVICES'].split(',')]
+
+        visible_devices = [int(gpu) for gpu in os.environ['CUDA_VISIBLE_DEVICES'].split(',')]          
 
         jax.distributed.initialize(
             local_device_ids=visible_devices
@@ -69,11 +70,10 @@ class ParallelMesh2D:
 
         print("[ParallelMesh2D]: Process ID ", jax.process_index())
         print("[ParallelMesh2D]: Global devices: ", jax.devices())
-        print("[ParallelMesh2D]: Local devices: ", jax.devices())
+        print("[ParallelMesh2D]: Local devices: ", jax.local_devices())
 
-        self.mesh_dims = (params["parNy"], params["parNx"])
+        self.mesh_dims = (params["parNy"], params["parNx"]) 
         self.unpadded_ny, self.unpadded_nx = params["X"].shape
-
 
         # make device mesh
         self.device_mesh = jax.make_mesh(self.mesh_dims, ('y', 'x')) 

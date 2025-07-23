@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from PyExner.state.roe_state import RoeState
 
 from PyExner.solvers.base import BaseSolver2D
-from PyExner.solvers.kernels import compute_dt, compute_masked_dt, roe_solve_2D
+from PyExner.solvers.kernels import compute_dt, roe_solve_2D
 from PyExner.solvers.registry import register_solver
 
 from PyExner.domain.mesh import Mesh2D
@@ -36,22 +36,20 @@ class RoeSolver(BaseSolver2D):
         self.fluxes = jnp.zeros((self.mesh.shape[0],self.mesh.shape[1],3))
     
     def step(self, time: float, dt: float):
+        self.state.h = self.state.h.at[self.mesh.mask].set(0.0)
         self.state = self._compute_new_state(dt)
         self.apply_boundary_conditions(time)
 
     def _compute_timestep(self, cfl: float) -> float:
-
-        if hasattr(self.mesh, "mask"): 
-            return cfl*compute_masked_dt(self.state, self.mesh.mask, self.dx)
-        else: 
-            return cfl*compute_dt(self.state, self.dx)
+        return cfl*compute_dt(self.state, self.dx)
 
     def _compute_new_state(self, dt):
-        return roe_solve_2D(self.fluxes, self.state, self.mesh.pad_dims[0][1], self.mesh.pad_dims[1][1], dt, self.dx) 
+        self.fluxes = jnp.zeros((self.mesh.shape[0],self.mesh.shape[1],3))   
+        return roe_solve_2D(self.fluxes, self.state, dt, self.dx)
 
     def apply_boundary_conditions(self, time: float):
-        self.boundaries.apply(self.state, time)
-        #account for mask
+        self.state = self.boundaries.apply(self.state, time)
+        
 
     def get_state(self):
         if hasattr(self.mesh, "mask"):

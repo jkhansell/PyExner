@@ -108,8 +108,8 @@ def build_dambreak(Ll=0, Lr=10, hl=0.005, hr=0.001, x0=5, T=6, dh=0.01):
         "flux_scheme": "Roe", 
         "integrator": "Forward Euler", 
         "parallel": True,
-        "parNx": 4, 
-        "parNy": 1, 
+        "parNx": 4,
+        "parNy": 2, 
         "out_freq" : 1,
         "dh" : dh,
         "initial_conditions": {
@@ -162,12 +162,11 @@ def pad_with_mask(arr, shard_dims):
 if __name__ == "__main__":
 
     T = 6
-    params = build_dambreak(T=T, dh=0.001)
+    params = build_dambreak(T=T, dh=0.01)
     
     a = time.perf_counter()
     last_state = run_driver(params)
     b = time.perf_counter()
-
 
     print(f"Elapsed time: {b-a}")
 

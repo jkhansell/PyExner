@@ -8,23 +8,6 @@ from PyExner.state.roe_state import RoeState
 from PyExner.utils.constants import g, DRY_TOL, VEL_TOL
 
 @jax.jit
-def compute_masked_dt(state: RoeState, mask: jnp.ndarray, dx: float):
-    h = jnp.where(mask, state.h, 0.0)
-    hu = jnp.where(mask, state.hu, 0.0)
-    hv = jnp.where(mask, state.hv, 0.0)
-
-    u = hu / (h + DRY_TOL)
-    v = hv / (h + DRY_TOL)
-    c = jnp.sqrt(g * h)
-
-    dt_x = jnp.where(mask, dx / (jnp.abs(u) + c + VEL_TOL), jnp.inf)
-    dt_y = jnp.where(mask, dx / (jnp.abs(v) + c + VEL_TOL), jnp.inf)
-
-    dt = jnp.minimum(jnp.min(dt_x), jnp.min(dt_y))
-    return dt
-
-
-@jax.jit
 def compute_dt(state: RoeState, dx: float):
     h = jnp.where(state.h > DRY_TOL, state.h, 0.0)
     hv = jnp.where(state.h > DRY_TOL, state.hv, 0.0)
@@ -37,7 +20,7 @@ def compute_dt(state: RoeState, dx: float):
     dt_x = jnp.min(dx / (jnp.abs(u) + c + VEL_TOL))
     dt_y = jnp.min(dx / (jnp.abs(v) + c + VEL_TOL))
 
-    dt = jnp.minimum(jnp.min(dt_x), jnp.min(dt_y))
+    dt = jnp.minimum(dt_x, dt_y)
     return dt
 
 @jax.jit
@@ -259,8 +242,8 @@ def roe_solver(si: RoeState, sj: RoeState, nx: float, ny: float, dx: float):
 
     return upwP, upwM
 
-@partial(jax.jit, static_argnums=(2,3))
-def roe_solve_2D(fluxes: jnp.ndarray, state: RoeState, pad_height: int, pad_width: int , dt: float, dx: float):
+@jax.jit
+def roe_solve_2D(fluxes: jnp.ndarray, state: RoeState, dt: float, dx: float):
 
     h, hu, hv, z, n = state.h, state.hu, state.hv, state.z, state.n
 
@@ -316,17 +299,6 @@ def roe_solve_2D(fluxes: jnp.ndarray, state: RoeState, pad_height: int, pad_widt
     hu_new = state.hu - dt * dhu / dx
     hv_new = state.hv - dt * dhv / dx
 
-    #Deal with boundary conditions due to padding SPMD
-
-    h_new = h_new.at[-pad_height:,:].set(jnp.expand_dims(h_new[-(pad_height+1),:],axis=0))
-    h_new = h_new.at[:,-pad_width:].set(jnp.expand_dims(h_new[:,-(pad_width+1)], axis=1))
-
-    hu_new = hu_new.at[-pad_height:,:].set(jnp.expand_dims(hu_new[-(pad_height+1),:], axis=0))
-    hu_new = hu_new.at[:,-pad_width:].set(jnp.expand_dims(hu_new[:,-(pad_width+1)], axis=1))
-
-    hv_new = hv_new.at[-pad_height:,:].set(jnp.expand_dims(hv_new[-(pad_height+1),:], axis=0))
-    hv_new = hv_new.at[:,-pad_width:].set(jnp.expand_dims(hv_new[:,-(pad_width+1)], axis=1))
-
     return RoeState(
         h=h_new,
         hu=hu_new,
@@ -334,4 +306,3 @@ def roe_solve_2D(fluxes: jnp.ndarray, state: RoeState, pad_height: int, pad_widt
         z=state.z,    # unchanged
         n=state.n     # unchanged
     )
-

@@ -1,5 +1,8 @@
 # PyExner/runtime/driver.py
 
+import jax 
+import jax.numpy as jnp
+
 from PyExner.domain.mesh import Mesh2D, ParallelMesh2D
 from PyExner.domain.boundary_registry import BoundaryManager
 
@@ -32,13 +35,11 @@ def run_driver(params: dict):
 
     if parallel == True:
         mesh = ParallelMesh2D(params)
-
         state = create_state_from_sharding(flux_scheme, params["initial_conditions"], mesh.sharding, mesh.mesh_dims)
         boundaries = BoundaryManager(params, mesh.X, mesh.Y)
 
     else:
         mesh = Mesh2D(params)
-
         state = create_state(flux_scheme, params["initial_conditions"])
         boundaries = BoundaryManager(params, mesh.X, mesh.Y)
 

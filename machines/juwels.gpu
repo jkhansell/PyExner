@@ -1,0 +1,13 @@
+#!/bin/bash
+
+module load Stages/2024
+module load GCC/12.3.0
+module load ParaStationMPI/5.9.2-1
+module load CMake
+module load MPI-settings/CUDA
+module load PnetCDF/1.12.3
+
+export CC=$(which mpicc)
+export PNETCDF_DIR=$PNETCDF
+export MPI4JAX_BUILD_MPICC=$CC
+mamba run -n PyExner pip install pnetcdf mpi4jax

@@ -46,7 +46,6 @@ class RoeState(BaseState):
         return cls(h=h, hu=hu, hv=hv, z=z, n=n)
 
 
-
 def Roe_state_flatten(state: RoeState):
     children = (state.h, state.hu, state.hv, state.z, state.n)
     return children, None
