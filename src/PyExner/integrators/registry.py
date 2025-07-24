@@ -8,8 +8,8 @@ def register_integrator(name):
         return cls
     return decorator
 
-def create_integrator(name: str, solver, cfl, end_time, out_freq):
+def create_integrator(name: str, solver, cfl, end_time, out_freq, mpi_handler):
     integrator_cls = INTEGRATOR_REGISTRY[name]
     if integrator_cls is None:
         raise ValueError(f"Unknown integration scheme '{name}'. Available options: {list(INTEGRATOR_REGISTRY.keys())}")
-    return integrator_cls(solver, cfl, end_time, out_freq)
+    return integrator_cls(solver, cfl, end_time, out_freq, mpi_handler)

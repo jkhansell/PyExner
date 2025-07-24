@@ -4,6 +4,11 @@ from jax import vmap
 from functools import partial
 import traceback
 
+#debugging
+import matplotlib.pyplot as plt
+from mpi4py import MPI
+
+
 BOUNDARY_REGISTRY = {}
 
 def register_boundary(name):
@@ -13,21 +18,35 @@ def register_boundary(name):
     return decorator
 
 @jax.jit
-def compute_label_mask(points, polygons):
-    def point_in_polygon(point, polygon):
-        x, y = point
-        xi, yi = polygon[:, 0], polygon[:, 1]
-        xj, yj = jnp.roll(xi, 1), jnp.roll(yi, 1)
-        intersect = ((yi > y) != (yj > y)) & (x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi)
-        return jnp.sum(intersect) % 2 == 1
+def point_in_polygon(point, polygon):
+    x, y = point
+    xi, yi = polygon[:, 0], polygon[:, 1]
+    xj, yj = jnp.roll(xi, 1), jnp.roll(yi, 1)
 
-    # vmapped over points then polygons
-    return jax.vmap(lambda poly: jax.vmap(lambda pt: point_in_polygon(pt, poly))(points))(polygons)
+    denom = jnp.where(jnp.abs(yj - yi) < 1e-12, 1e-12, yj - yi)
+    test_x = (xj - xi) * (y - yi) / denom + xi
+    intersect = ((yi > y) != (yj > y)) & (x < test_x)
+
+    return jnp.sum(intersect) % 2 == 1
+
+@jax.jit
+def compute_label_mask(points, polygons):
+    """
+    Args:
+        points: jnp.ndarray of shape (N, 2)
+        polygons: jnp.ndarray of shape (M, K, 2), M polygons each with K vertices
+    Returns:
+        masks: jnp.ndarray of shape (M, N), bool array where masks[i, j] = True
+               iff points[j] is inside polygons[i]
+    """
+    point_mask_fn = jax.vmap(lambda pt, poly: point_in_polygon(pt, poly), in_axes=(0, None))
+    polygon_mask_fn = jax.vmap(lambda poly: point_mask_fn(points, poly), in_axes=0)
+    return polygon_mask_fn(polygons)
 
 def compute_reflective_indices(mask: jnp.ndarray, normal: jnp.ndarray):
-    shift = -jnp.rint(jnp.flip(normal)).astype(int)
+    shift = -jnp.rint(jnp.flip(normal))
     boundary_cells = jnp.argwhere(mask)
-    interior_cells = boundary_cells + shift
+    interior_cells = (boundary_cells + shift).astype(jnp.int32)
 
     Ny, Nx = mask.shape
     interior_cells = jnp.clip(interior_cells, a_min=0, a_max=jnp.array([Ny - 1, Nx - 1]))
@@ -66,6 +85,7 @@ class BoundaryManager:
 
         # Pad polygons to uniform vertex count
         max_vertices = max(p.shape[0] for p in polygons)
+
         polygons_padded = jnp.stack([
             jnp.pad(p, ((0, max_vertices - p.shape[0]), (0, 0))) for p in polygons
         ])
@@ -73,6 +93,9 @@ class BoundaryManager:
         masks = compute_label_mask(points, polygons_padded).reshape(
             len(polygons), self.X.shape[0], self.X.shape[1]
         )
+
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
 
         # Instantiate handler objects
         for i, key in enumerate(self.boundary_specs.keys()):
@@ -94,6 +117,7 @@ class BoundaryManager:
                         normal=normals[i],
                         values=boundary_values
                     )
+
                 self.boundary_handlers.append(handler)
 
             except KeyError:

@@ -15,6 +15,7 @@ class ForwardEulerIntegrator(BaseTimeIntegrator):
 
         next_out_time = (int(self.time / self.out_freq) + 1) * self.out_freq
         next_target = min(next_out_time, self.end_time)
+        
         if self.time + self.dt >= next_target - self.eps:
             self.dt = next_target - self.time
 

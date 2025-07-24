@@ -6,6 +6,8 @@ from abc import ABC, abstractmethod
 # local imports
 from PyExner.domain.mesh import Mesh2D
 from PyExner.domain.boundary_registry import BoundaryManager
+from PyExner.parallel.mpi_utils import Parallel
+
 
 class BaseSolver2D(ABC):
     """
@@ -13,12 +15,14 @@ class BaseSolver2D(ABC):
     Provides a common interface and lifecycle.
     """
 
-    def __init__(self, mesh: Mesh2D, boundaries: BoundaryManager):
+    def __init__(self, mesh: Mesh2D, boundaries: BoundaryManager, mpi_handler: Parallel):
         self.mesh = mesh
         self.boundaries = boundaries
-        self.dx = self.mesh.spacing()
-        self.X, self.Y = mesh.cell_centers()
+        self.dx = self.mesh.dh
+        self.X = mesh.local_X
+        self.Y = mesh.local_Y
         self.time: float = 0.0
+        self.mpi_handler = mpi_handler
 
     @abstractmethod
     def initialize(self, init_fields):
@@ -44,26 +48,8 @@ class BaseSolver2D(ABC):
         pass
 
     @abstractmethod
-    def _compute_new_state(self):
-        pass
-
-    @abstractmethod
-    def apply_boundary_conditions(self):
-        """
-        Apply boundary conditions
-        """
-        pass
-
-    @abstractmethod
     def get_state(self):
         """
         Return the current simulation state.
-        """
-        pass
-
-
-    def exchange_halos(self):
-        """
-        Optional override for halo exchange in distributed mode.
         """
         pass

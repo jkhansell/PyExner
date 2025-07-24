@@ -5,7 +5,7 @@ from typing import Callable, List
 from PyExner.solvers.base import BaseSolver2D
 
 class BaseTimeIntegrator(ABC):
-    def __init__(self, solver: BaseSolver2D, cfl: float, end_time: float, out_freq: float):
+    def __init__(self, solver: BaseSolver2D, cfl: float, end_time: float, out_freq: float, mpi_handler):
         self.solver = solver
         self.cfl = cfl
         self.end_time = end_time
@@ -13,7 +13,7 @@ class BaseTimeIntegrator(ABC):
         self.dt = None
         self.eps = 1e-12
         self.out_freq = out_freq
-
+        self.mpi_handler = mpi_handler
         self.callbacks: List[Callable[[BaseSolver2D], None]] = []
 
     def add_callback(self, fn: Callable[[BaseSolver2D], None]):
@@ -32,12 +32,13 @@ class BaseTimeIntegrator(ABC):
         while self.time < self.end_time - self.eps:
             self.step(self)
             
-            if abs(self.time / self.out_freq - round(self.time / self.out_freq)) < self.eps or self.iters == 0:
-                print(f"[{self.get_class_name()}] Iteration: {self.iters}  Time: {self.time:.9f}")
-                print(f"[{self.get_class_name()}] Timestep:  {self.dt:.6f}")
-            
+            if self.mpi_handler.rank == 0:
+                if abs(self.time / self.out_freq - round(self.time / self.out_freq)) < self.eps or self.iters == 0:
+                    print(f"[{self.get_class_name()}] Iteration: {self.iters}  Time: {self.time:.9f}")
+                    print(f"[{self.get_class_name()}] Timestep:  {self.dt:.9f}")
+                
             self.iters += 1
-            
+            b  
             for cb in self.callbacks:
                 cb(self.solver)
 

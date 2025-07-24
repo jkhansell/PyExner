@@ -4,6 +4,7 @@ import functools
 from scipy.optimize import fsolve
 import jax
 import time 
+import xarray as xr
 
 from PyExner import run_driver
 from PyExner.utils.constants import g
@@ -74,25 +75,8 @@ def build_dambreak(Ll=0, Lr=10, hl=0.005, hr=0.001, x0=5, T=6, dh=0.01):
     x_range = [Ll, Lr]
     y_range = [0,.1]
 
-    x = np.arange(x_range[0]-dh, x_range[1]+dh, dh)
-    y = np.arange(y_range[0]-dh, y_range[1]+dh, dh)
-
-    X, Y = np.meshgrid(x, y, indexing="xy")
-
-    mask = (X <= x0)
-
-    h = np.where(mask, hl, hr)
-    u = np.zeros_like(h)
-    v = np.zeros_like(h)
-    z = 2*np.ones_like(h)
-    n = np.zeros_like(h)
-
-    x_range = [0, 10]
-
-    y_range = [0,.1]
-
-    inlet_polygon = [[x_range[0]-dh/2, y_range[0]-dh/2],
-                     [x_range[0]+dh/2, y_range[0]-dh/2],
+    inlet_polygon = [[x_range[0]-dh/2, y_range[0]-dh],
+                     [x_range[0]+dh/2, y_range[0]-dh],
                      [x_range[0]+dh/2, y_range[1]+dh/2],
                      [x_range[0]-dh/2, y_range[1]+dh/2]]
     
@@ -102,23 +86,17 @@ def build_dambreak(Ll=0, Lr=10, hl=0.005, hr=0.001, x0=5, T=6, dh=0.01):
                       [x_range[1]+dh/2, y_range[1]+dh/2],
                       [x_range[1]-dh/2, y_range[1]+dh/2]]
     
+
     params = {
         "end_time" : T,
         "cfl" : 0.5,
         "flux_scheme": "Roe", 
         "integrator": "Forward Euler", 
-        "parallel": True,
         "parNx": 4, 
         "parNy": 1, 
         "out_freq" : 1,
         "dh" : dh,
-        "initial_conditions": {
-            "h_init": h,
-            "u_init": u,
-            "v_init": v,
-            "z_init": z,
-            "roughness": n,
-        },
+        "initial_conditions": "input.nc",
         "boundaries": {
             "inlet": {
                 "type": "Transmissive",
@@ -135,53 +113,33 @@ def build_dambreak(Ll=0, Lr=10, hl=0.005, hr=0.001, x0=5, T=6, dh=0.01):
                 "normal": [1.0,0.0]
             }
         },
-        "X": X,
-        "Y": Y
     }
 
     return params
 
 
-def pad_with_mask(arr, shard_dims):
-    h, w = arr.shape
-    shard_h, shard_w = shard_dims
-
-    pad_h = (shard_h - (h % shard_h)) % shard_h
-    pad_w = (shard_w - (w % shard_w)) % shard_w
-
-    pad_height = (0, pad_h)
-    pad_width = (0, pad_w)
-
-    padded = jnp.pad(arr, (pad_height, pad_width), mode='constant', constant_values=0.0)
-
-    mask = jnp.ones_like(arr, dtype=bool)
-    mask = jnp.pad(mask, (pad_height, pad_width), mode='constant', constant_values=False)
-
-    return padded, mask, (pad_height, pad_width)
-
 if __name__ == "__main__":
 
-    T = 6
-    params = build_dambreak(T=T, dh=0.001)
+    from mpi4py import MPI 
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+
+    T = 1
+    params = build_dambreak(Ll=0, Lr=30, hl=1, hr=0.2, x0=15, T=T)
     
-    a = time.perf_counter()
-    last_state = run_driver(params)
-    b = time.perf_counter()
+    last_state, coords = run_driver(params)
 
-
-    print(f"Elapsed time: {b-a}")
-
-    x = params["X"][params["X"].shape[0]//2]
+    x = coords[0][coords[0].shape[0]//2]
     h = last_state.h
 
-    print(h.shape)
-    h_a, u_a = dambreak_on_wet_no_friction_analytical(T, x)
+    h_a, u_a = dambreak_on_wet_no_friction_analytical(T, x, hl=1, hr=0.2, x0=15)
 
     plt.plot(x, h_a, linestyle="dashed", linewidth=4, c="black", label="Analytical")
     plt.plot(x, h[h.shape[0]//2], linewidth=2, c="red", label="PyExner")
     plt.legend()
-    plt.savefig("h.png", dpi=200)
-    plt.close() 
+    plt.savefig(f"h{rank}.png", dpi=200)
+    plt.close()
 
     """import jax
     import jax.numpy as jnp

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
+
 from PyExner.state.registry import register_state
 from PyExner.state.base import BaseState
 
@@ -13,7 +14,7 @@ class RoeState(BaseState):
 
     @classmethod
     def empty(cls, mesh: 'Mesh2D', dtype=jnp.float32) -> "RoeState":
-        shape = mesh.shape  # e.g., (nx, ny)
+        shape = mesh.local_shape  # e.g., (nx, ny)
         zeros = jnp.zeros(shape, dtype=dtype)
         ones = jnp.ones(shape, dtype=dtype)
         # Initialize bed elevation z and source term G as needed
