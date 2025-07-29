@@ -8,7 +8,7 @@ from PyExner.state.roe_state import RoeState
 
 @register_boundary("Roe Transmissive")
 @dataclass
-class TransmissiveBoundary:
+class Roe_TransmissiveBoundary:
     mask: jnp.ndarray                            # shape (Ny, Nx), boolean
     normal: jnp.ndarray                          # shape (2,), [nx, ny]
     interior_indices: Tuple[jnp.ndarray, jnp.ndarray]  # (y_interior, x_interior)
@@ -42,15 +42,15 @@ class TransmissiveBoundary:
 
         return RoeState(h=h_new, hu=hu_new, hv=hv_new, z=z_new, n=n_new)
 
-def TransmissiveBoundary_flatten(b: TransmissiveBoundary):
+def Roe_TransmissiveBoundary_flatten(b: Roe_TransmissiveBoundary):
     children = (b.mask, b.normal, b.interior_indices, b.boundary_indices)
     return children, None
 
-def TransmissiveBoundary_unflatten(aux, children):
-    return TransmissiveBoundary(*children)
+def Roe_TransmissiveBoundary_unflatten(aux, children):
+    return Roe_TransmissiveBoundary(*children)
 
 jax.tree_util.register_pytree_node(
-    TransmissiveBoundary,
-    TransmissiveBoundary_flatten,
-    TransmissiveBoundary_unflatten
+    Roe_TransmissiveBoundary,
+    Roe_TransmissiveBoundary_flatten,
+    Roe_TransmissiveBoundary_unflatten
 )

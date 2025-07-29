@@ -7,8 +7,8 @@ from PyExner.parallel.mpi_utils import Parallel
 from PyExner.io.pnetcdf_reader import PnetCDFStateIO
 
 from PyExner.state.registry import create_empty_state
-from PyExner.solvers.registry import create_solver
-from PyExner.integrators.registry import create_integrator
+from PyExner.solvers.registry import create_solver_bundle
+from PyExner.integrators.registry import create_integrator_bundle
 
 import time
 
@@ -27,6 +27,7 @@ def run_driver(params: dict):
         - cfl: float, CFL number for timestep control (optional)
     """
     
+    # read parameter file
 
     end_time = params.get("end_time", 1)
     out_freq = params.get("out_freq", 1)
@@ -35,30 +36,29 @@ def run_driver(params: dict):
     flux_scheme = params.get("flux_scheme", "Roe")
     time_scheme = params.get("integrator", "Forward Euler")
 
+    # Initialization
     mpi_handler = Parallel(params)
-    pnetcdf_reader = PnetCDFStateIO(params["initial_conditions"], mpi_handler)
+    pnetcdf_reader = PnetCDFStateIO(params["initial_conditions"], "output.nc", mpi_handler)
     
     mesh = pnetcdf_reader.generate_mesh()
 
     state = create_empty_state(flux_scheme, mesh, mpi_handler.rank)
-
-    pnetcdf_reader.read_state(state, mesh)
-
+    state = pnetcdf_reader.read_state(state, mesh)
     boundaries = boundaries = BoundaryManager(params, mesh.local_X, mesh.local_Y)
 
-    # Creates initial conditions from parameters
-    solver = create_solver(flux_scheme, mesh, boundaries, mpi_handler)
-    solver.initialize(state)
+    solver = create_solver_bundle(flux_scheme)
+    solver_config = solver.config(state, mpi_handler, boundaries, mesh.dh)
+    state = solver.init_fn(state, solver_config)
 
-    # Creates integrator from state and solver
-    integrator = create_integrator(time_scheme, solver, cfl, end_time, out_freq, mpi_handler)
-    
+    integrator = create_integrator_bundle(time_scheme)
+    integrator_config = integrator.config(cfl, end_time, out_freq, solver, solver_config)
+
     a = time.perf_counter()
-    integrator.run()
+    state = integrator.run_fn(state, integrator_config)
+    #jax.tree_util.tree_map(lambda x: x.block_until_ready(), state)
     b = time.perf_counter()
 
-    if mpi_handler.rank == 0: 
-        print(f"Elapsed Time: {b-a}")
+    if mpi_handler.rank == 0:
+        print(f"Elapsed time: {b-a}")
 
-    return solver.get_state(), solver.get_coords()
-
+    return state, (mesh.local_X, mesh.local_Y)

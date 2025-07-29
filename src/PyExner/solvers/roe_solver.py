@@ -8,61 +8,64 @@ from mpi4py import MPI
 # local imports
 from PyExner.state.roe_state import RoeState
 
-from PyExner.solvers.base import BaseSolver2D
-from PyExner.solvers.kernels import compute_dt, roe_solve_2D, make_halo_exchange
-from PyExner.solvers.registry import register_solver
+from PyExner.solvers.kernels.roe import compute_dt, roe_solve_2D, make_halo_exchange
+from PyExner.solvers.registry import SolverConfig, SolverBundle, register_solver_bundle
 
-from PyExner.domain.mesh import Mesh2D
+def get_mask(state):
+    mask = jnp.zeros_like(state.h)
+    mask = mask.at[1:-1, 1:-1].set(1)
+    return mask
+
+def config_fn_roe(state, mpi_handler, boundaries, dx):
+    halo_exchange = make_halo_exchange(mpi_handler)
+
+    return SolverConfig(
+        mpi_handler = mpi_handler,
+        boundaries = boundaries,
+        dx = dx, 
+        halo_exchange = halo_exchange
+    )
 
 
-@register_solver("Roe")
-class RoeSolver(BaseSolver2D):
-    """
-    Solver for the 2D Shallow Water Equations (SWE).
-    Tracks water height (h), momenta (hu, hv), and bed elevation (z).
-    """
+def init_fn_roe(state: RoeState, config: SolverConfig) -> RoeState:
 
-    def initialize(self, init_fields: RoeState):
-        """
-        Initialize SWE state with keys:
-        - 'h': water height
-        - 'u': x-velocity
-        - 'v': y-velocity
-        - 'z': bed elevation
-        - 'n': Manning roughness
-        """
+    h = config.halo_exchange(state.h)
+    hu = config.halo_exchange(state.hu)
+    hv = config.halo_exchange(state.hv)
+    z = config.halo_exchange(state.z)
+    n = config.halo_exchange(state.n)
 
-        self.state = init_fields
+    return RoeState(h=h, hu=hu, hv=hv, z=z, n=n)
 
-        self.halo_exchange = make_halo_exchange(self.mpi_handler)
+@partial(jax.jit, static_argnums=(3,))
+def step_fn_roe(state: RoeState, time: float, dt: float, config: SolverConfig) -> RoeState:    
+    new_state = roe_solve_2D(state, dt, config.dx)
 
-        self.state.h = self.halo_exchange(self.state.h)
-        self.state.hu = self.halo_exchange(self.state.hu)
-        self.state.hv = self.halo_exchange(self.state.hv)
-        self.state.z = self.halo_exchange(self.state.z)
-        self.state.n = self.halo_exchange(self.state.n)
-        
-        self.mask = jnp.zeros_like(self.state.h)
-        self.mask = self.mask.at[1:-1, 1:-1].set(1)
+    # Update halos
+    h = config.halo_exchange(new_state.h)
+    hu = config.halo_exchange(new_state.hu)
+    hv = config.halo_exchange(new_state.hv) 
 
-    def step(self, time: float, dt: float):
-        fluxes = jnp.zeros((self.mesh.local_shape[0],self.mesh.local_shape[1],3))
+    updated_state = RoeState(h=h, hu=hu, hv=hv, z=new_state.z, n=new_state.n)
 
-        self.state = roe_solve_2D(fluxes, self.state, dt, self.dx) 
+    # Apply boundary conditions (must be pure)
+    final_state = config.boundaries.apply(updated_state, time)
 
-        self.state.h = self.halo_exchange(self.state.h)
-        self.state.hu = self.halo_exchange(self.state.hu)
-        self.state.hv = self.halo_exchange(self.state.hv)
+    return final_state
 
-        self.state = self.boundaries.apply(self.state, time)
+@partial(jax.jit, static_argnums=(3,))
+def compute_dt_roe(state: RoeState, cfl: float, mask: jax.Array, config: SolverConfig) -> float:
+    local_dt = cfl * compute_dt(state, mask, config.dx)
+    global_dt = mpi4jax.allreduce(local_dt, op=MPI.MIN, comm=config.mpi_handler.cart_comm)
+    return global_dt
 
-    def _compute_timestep(self, cfl: float) -> float:
-        local_dt = cfl*compute_dt(self.state, self.mask, self.dx)
-        global_dt = mpi4jax.allreduce(x=local_dt, op=MPI.MIN , comm=self.mpi_handler.cart_comm)
-        return global_dt
-
-    def get_state(self):
-        return self.state
-
-    def get_coords(self): 
-        return self.mesh.local_X, self.mesh.local_Y 
+@register_solver_bundle("Roe")
+def solver_roe():
+    return SolverBundle(
+        name="Roe",
+        config=config_fn_roe,
+        mask_fn=get_mask,
+        init_fn=init_fn_roe,
+        step_fn=step_fn_roe,
+        compute_dt_fn=compute_dt_roe
+    )

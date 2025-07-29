@@ -249,10 +249,9 @@ def roe_solver(si: RoeState, sj: RoeState, nx: float, ny: float, dx: float):
     return upwP, upwM
 
 @jax.jit
-def roe_solve_2D(fluxes: jnp.ndarray, state: RoeState, dt: float, dx: float):
+def roe_solve_2D(state: RoeState, dt: float, dx: float):
 
     h, hu, hv, z, n = state.h, state.hu, state.hv, state.z, state.n
-
 
     # X-direction interface slices (axis=1)
     s1_x = RoeState(
@@ -265,18 +264,18 @@ def roe_solve_2D(fluxes: jnp.ndarray, state: RoeState, dt: float, dx: float):
 
     s2_x = RoeState(
         h =   h[:, 1:], 
-        hu = hu[:, 1:], 
+        hu = hu[:, 1:],
         hv = hv[:, 1:],
-        z =   z[:, 1:], 
+        z =   z[:, 1:],
         n =   n[:, 1:]
     )
 
     # Y-direction interface slices (axis=0)
     s1_y = RoeState(
-        h =   h[:-1,:], 
-        hu = hu[:-1,:], 
+        h =   h[:-1,:],
+        hu = hu[:-1,:],
         hv = hv[:-1,:],
-        z =   z[:-1,:], 
+        z =   z[:-1,:],
         n =   n[:-1,:]
     )
 
@@ -292,6 +291,7 @@ def roe_solve_2D(fluxes: jnp.ndarray, state: RoeState, dt: float, dx: float):
     upwP_y, upwM_y = roe_solver(s1_y, s2_y, 0, -1, dx)
 
     # upwinding solution
+    fluxes = jnp.zeros((h.shape[0], h.shape[1], 3))
 
     fluxes = fluxes.at[:,:-1].add(upwM_x) 
     fluxes = fluxes.at[:, 1:].add(upwP_x) 
@@ -317,6 +317,7 @@ def roe_solve_2D(fluxes: jnp.ndarray, state: RoeState, dt: float, dx: float):
 def make_halo_exchange(mpi_handler):
     neighbors = mpi_handler.neighbors
     comm = mpi_handler.cart_comm
+
     @jax.jit
     def halo_exchange(arr):
         send_order = (

@@ -4,20 +4,19 @@ import jax.numpy as jnp
 from typing import Tuple
 
 from PyExner.domain.boundary_registry import register_boundary
-from PyExner.state.roe_state import RoeState
+from PyExner.state.roe_exner_state import RoeExnerState
 
-
-@register_boundary("Roe Reflective")
+@register_boundary("Roe Exner Transmissive")
 @dataclass
-class Roe_ReflectiveBoundary:
-    mask: jnp.ndarray                            # shape (Ny, Nx), boolean
-    normal: jnp.ndarray                          # shape (2,), [nx, ny]
-    interior_indices: Tuple[jnp.ndarray, jnp.ndarray]  # (y_interior, x_interior)
-    boundary_indices: Tuple[jnp.ndarray, jnp.ndarray]  # (y_boundary, x_boundary)
+class RoeExner_TransmissiveBoundary:
+    mask: jax.Array                            # shape (Ny, Nx), boolean
+    normal: jax.Array                          # shape (2,), [nx, ny]
+    interior_indices: Tuple[jax.Array, jax.Array]  # (y_interior, x_interior)
+    boundary_indices: Tuple[jax.Array, jax.Array]  # (y_boundary, x_boundary)
 
-    def apply(self, state: RoeState, time: float) -> RoeState:
+    def apply(self, state: RoeExnerState, time: float) -> RoeExnerState:
         """
-        Applies reflective boundary conditions:
+        Applies transmissive boundary conditions:
         - Scalars (`h`, `z`, `n`) are copied from interior cells.
         - Momentums (`hu`, `hv`) have the normal component reflected.
         """
@@ -35,23 +34,23 @@ class Roe_ReflectiveBoundary:
         hv_int = state.hv[iy, ix]
 
         # Reflect normal component
-        hu_ref = hu_int * (1 - 2 * nx * nx)
-        hv_ref = hv_int * (1 - 2 * ny * ny)
+        hu_ref = hu_int
+        hv_ref = hv_int
 
         hu_new = state.hu.at[by, bx].set(hu_ref)
         hv_new = state.hv.at[by, bx].set(hv_ref)
 
-        return RoeState(h=h_new, hu=hu_new, hv=hv_new, z=z_new, n=n_new)
+        return RoeExnerState(h=h_new, hu=hu_new, hv=hv_new, z=z_new, n=state.n, G=state.G)
 
-def Roe_ReflectiveBoundary_flatten(b: Roe_ReflectiveBoundary):
+def RoeExner_TransmissiveBoundary_flatten(b: RoeExner_TransmissiveBoundary):
     children = (b.mask, b.normal, b.interior_indices, b.boundary_indices)
     return children, None
 
-def Roe_ReflectiveBoundary_unflatten(aux, children):
-    return Roe_ReflectiveBoundary(*children)
+def RoeExner_TransmissiveBoundary_unflatten(aux, children):
+    return RoeExner_TransmissiveBoundary(*children)
 
 jax.tree_util.register_pytree_node(
-    Roe_ReflectiveBoundary,
-    Roe_ReflectiveBoundary_flatten,
-    Roe_ReflectiveBoundary_unflatten
+    RoeExner_TransmissiveBoundary,
+    RoeExner_TransmissiveBoundary_flatten,
+    RoeExner_TransmissiveBoundary_unflatten
 )

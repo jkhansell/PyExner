@@ -11,5 +11,4 @@
 source /p/project/ehrtas/villalobos1/bedload/PyExner/machines/juwels.gpu
 
 rm output.nc
-
-MPI4JAX_USE_CUDA_MPI=1 srun -N 1 -n 4 --gpu-bind=closest --cpu-bind=cores mamba run --name PyExner python dambreak.py
+MPI4JAX_USE_CUDA_MPI=1 srun -N 1 -n 4 --gpu-bind=closest --cpu-bind=cores mamba run --name PyExner python 2D_dambreak.py

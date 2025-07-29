@@ -20,8 +20,8 @@ ATOL_ITERATIVE = 1e-8
 # Tolerance for flux or gradient thresholds
 FLUX_TOL = 1e-12
 
-# Tolerance for adaptive timestep criteria
-TIMESTEP_TOL = 1e-7
+# Tolerance for integration methods
+TIMESTEP_TOL = 1e-14
 
 # Tolerance for dry domains
 DRY_TOL = 1e-6

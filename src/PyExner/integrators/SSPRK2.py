@@ -1,16 +1,17 @@
-# PyExner/integrators/forwardeuler.py
-
-from PyExner.utils.constants import TIMESTEP_TOL
-
-from PyExner.integrators.registry import IntegratorConfig, IntegratorBundle, register_integrator_bundle
-from PyExner.solvers.registry import SolverBundle, SolverConfig
-from PyExner.state.base import BaseState
-from typing import NamedTuple
+# PyExner/integrators/SSPRK2.py
 
 import jax
 import jax.numpy as jnp
+from jax.tree_util import tree_map
 
-def config_fn_forwardeuler(cfl, end_time, out_freq, solver_bundle, solver_config):
+from typing import NamedTuple
+
+from PyExner.utils.constants import TIMESTEP_TOL
+from PyExner.integrators.registry import IntegratorConfig, IntegratorBundle, register_integrator_bundle
+from PyExner.solvers.registry import SolverBundle, SolverConfig
+
+
+def config_fn_SSPRK2(cfl, end_time, out_freq, solver_bundle, solver_config):
     return IntegratorConfig(
         cfl = cfl,
         end_time = end_time, 
@@ -19,14 +20,6 @@ def config_fn_forwardeuler(cfl, end_time, out_freq, solver_bundle, solver_config
         solver_bundle = solver_bundle
     )
 
-
-class SimState(NamedTuple):
-    time: float
-    out_freq: float
-    end_time: float
-    dt: float
-    state: BaseState
-    cfl: float
 
 def cond_fn(simstate):
     next_out_time = ((simstate.time / simstate.out_freq).astype(int) + 1) * simstate.out_freq
@@ -39,8 +32,13 @@ def make_body_fn(solver_bundle, solver_config):
     def body_fn(simstate):
         mask = solver_bundle.mask_fn(simstate.state) 
         new_dt = solver_bundle.compute_dt_fn(simstate.state, simstate.cfl, mask, solver_config)
-        new_state = solver_bundle.step_fn(simstate.state, simstate.time, new_dt, solver_config)
-
+        
+        state_1 = solver_bundle.step_fn(simstate.state, simstate.time, new_dt, solver_config)
+        state_2 = solver_bundle.step_fn(state_1, simstate.time, new_dt, solver_config)
+        
+        # SSPRK2 combination: u^{n+1} = 0.5 * u^n + 0.5 * u^{(2)}
+        new_state = tree_map(lambda a, b: 0.5 * a + 0.5 * b, simstate.state, state_2)
+        
         return SimState(
             time = simstate.time + new_dt, 
             out_freq=simstate.out_freq, 
@@ -52,7 +50,7 @@ def make_body_fn(solver_bundle, solver_config):
 
     return body_fn
 
-def run_fn_forwardeuler(state: BaseState, config: IntegratorConfig) -> BaseState:
+def run_fn_SSPRK2(state: BaseState, config: IntegratorConfig) -> BaseState:
     iters = 0
     time = 0.0 
     mask = config.solver_bundle.mask_fn(state) 
@@ -78,11 +76,10 @@ def run_fn_forwardeuler(state: BaseState, config: IntegratorConfig) -> BaseState
         dt = simstate.dt
         state = simstate.state
 
-        dt = config.solver_bundle.compute_dt_fn(state, config.cfl, mask, config.solver_config)
-
         next_out_time = (int(time / config.out_freq) + 1) * config.out_freq
         next_target = min(next_out_time, config.end_time)
         
+        dt = config.solver_bundle.compute_dt_fn(state, config.cfl, mask, config.solver_config)
 
         if time + dt >= next_target - TIMESTEP_TOL:
             dt = next_target - time
@@ -91,18 +88,18 @@ def run_fn_forwardeuler(state: BaseState, config: IntegratorConfig) -> BaseState
 
         if config.solver_config.mpi_handler.rank == 0:
             if abs(time / config.out_freq - round(time / config.out_freq)) < TIMESTEP_TOL or iters == 0:
-                print(f"[Forward Euler Integrator] Iteration: {iters}  Time: {time:.9f}")
-                print(f"[Forward Euler Integrator] Timestep:  {dt:.9f}")
+                print(f"[SSPRK2 Integrator] Iteration: {iters}  Time: {time:.9f}")
+                print(f"[SSPRK2 Integrator] Timestep:  {dt:.9f}")
 
         iters += 1
         time += dt
 
     return state
 
-@register_integrator_bundle("Forward Euler")
-def integrator_forwardeuler():
+@register_integrator_bundle("SSPRK2")
+def integrator_SSPRK2():
     return IntegratorBundle(
-        name="Forward Euler",
-        config = config_fn_forwardeuler,
-        run_fn = run_fn_forwardeuler
+        name="SSPRK2",
+        config = config_fn_SSPRK2,
+        run_fn = run_fn_SSPRK2
     )

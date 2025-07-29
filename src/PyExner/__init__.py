@@ -1,9 +1,3 @@
-from .domain import (
-    Mesh2D,
-    BoundaryManager, 
-    ReflectiveBoundary, 
-    TransmissiveBoundary
-)
 
 from .runtime.driver import run_driver
 
@@ -15,20 +9,18 @@ from .state import (
     register_state
 )
 
-from .solvers import RoeSolver
 
 from .solvers import (
     SOLVER_REGISTRY,
-    create_solver,
-    register_solver
+    create_solver_bundle,
+    register_solver_bundle
 )
 
-from .integrators import ForwardEulerIntegrator
 
 from .integrators import (
     INTEGRATOR_REGISTRY,
-    create_integrator,
-    register_integrator
+    create_integrator_bundle,
+    register_integrator_bundle
 )
 
 __all__ = [
@@ -38,12 +30,10 @@ __all__ = [
     "STATE_REGISTRY",
     "create_state",
     "register_state",
-    "RoeSolver",
     "SOLVER_REGISTRY",
-    "create_solver",
-    "register_solver",
-    "ForwardEulerIntegrator",
+    "create_solver_bundle",
+    "register_solver_bundle",
     "INTEGRATOR_REGISTRY",
-    "create_integrator",
-    "register_integrator",
+    "create_integrator_bundle",
+    "register_integrator_bundle",
 ]

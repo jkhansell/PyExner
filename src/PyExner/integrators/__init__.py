@@ -1,9 +1,9 @@
-from .forwardeuler import ForwardEulerIntegrator
+from .forwardeuler import integrator_forwardeuler
 
 from .registry import (
     INTEGRATOR_REGISTRY,
-    create_integrator, 
-    register_integrator
+    create_integrator_bundle, 
+    register_integrator_bundle
 ) 
 
-__all__ = ["ForwardEulerIntegrator", "INTEGRATOR_REGISTRY", "create_integrator", "register_integrator"]
+__all__ = ["INTEGRATOR_REGISTRY", "create_integrator_bundle", "register_integrator_bundle"]

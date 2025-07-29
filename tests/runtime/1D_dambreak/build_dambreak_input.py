@@ -22,15 +22,15 @@ def build_dambreak(Ll=0, Lr=10, hl=0.005, hr=0.001, x0=5, dh=0.01):
 
     ds = xr.Dataset(
         {
-            "h": (["y", "x"], h),
-            "hu": (["y", "x"], h*u),
-            "hv": (["y", "x"], h*v),
-            "z": (["y", "x"], z),
-            "n": (["y", "x"], n),
+            "h": (["y", "x"], h.astype(np.float32)),
+            "hu": (["y", "x"], (h*u).astype(np.float32)),
+            "hv": (["y", "x"], (h*v).astype(np.float32)),
+            "z": (["y", "x"], z.astype(np.float32)),
+            "n": (["y", "x"], n.astype(np.float32)),
         },
         coords={
-            "x": x,
-            "y": y,
+            "x": x.astype(np.float32),
+            "y": y.astype(np.float32),
         },
         attrs={
             "description": "Initial condition for SWE test case",
@@ -42,4 +42,4 @@ def build_dambreak(Ll=0, Lr=10, hl=0.005, hr=0.001, x0=5, dh=0.01):
     ds.to_netcdf("input.nc", format="NETCDF3_64BIT")
 
 if __name__ == "__main__":
-    build_dambreak(Ll=0, Lr=30, hl=1, hr=0.2, x0=15)
+    build_dambreak(Ll=0, Lr=100, hl=1, hr=0.2, x0=50, dh=0.01)

@@ -1,7 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dc_replace
 import jax
 import jax.numpy as jnp
-
 
 from PyExner.state.registry import register_state
 from PyExner.state.base import BaseState
@@ -46,6 +45,8 @@ class RoeState(BaseState):
 
         return cls(h=h, hu=hu, hv=hv, z=z, n=n)
 
+    def replace(self, **kwargs):
+        return dc_replace(self, **kwargs)
 
 
 def Roe_state_flatten(state: RoeState):
