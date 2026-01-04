@@ -1,5 +1,7 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
+
 from dataclasses import dataclass, fields
 
 
@@ -38,3 +40,9 @@ class BaseState:
                 updated_fields[f.name] = val
         return self.__class__(**updated_fields)
     
+    def to_host(self):
+        def _copy(x):
+            arr = jax.device_get(x)
+            return np.ascontiguousarray(arr)
+
+        return jax.tree_util.tree_map(_copy, self)

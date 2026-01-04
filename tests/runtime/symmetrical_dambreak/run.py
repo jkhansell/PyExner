@@ -3,23 +3,10 @@ import time
 import functools
 import matplotlib.pyplot as plt
 
-
 from PyExner import run_driver
 
 if __name__ == "__main__":
 
     config_path = sys.argv[1]
-    
     state, coords = run_driver(config_path)
-
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
-
-    plt.imshow(state.h)
-    plt.colorbar()
-    plt.savefig(f"last_h_{rank}.png")
-    plt.close()
-
     

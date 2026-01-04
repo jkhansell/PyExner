@@ -11,8 +11,10 @@ from PyExner.solvers.registry import create_solver_bundle
 from PyExner.integrators.registry import create_integrator_bundle
 
 import time
+import yaml 
 
-def run_driver(params: dict):
+
+def run_driver(config_path: str):
     """
     Run a simulation given a full parameter dictionary.
 
@@ -29,6 +31,9 @@ def run_driver(params: dict):
     
     # read parameter file
 
+    with open(config_path, "r") as f:
+        params = yaml.safe_load(f)
+        
     end_time = params.get("end_time", 1)
     out_freq = params.get("out_freq", 1)
 
@@ -38,12 +43,12 @@ def run_driver(params: dict):
 
     # Initialization
     mpi_handler = Parallel(params)
-    pnetcdf_reader = PnetCDFStateIO(params["initial_conditions"], "output.nc", mpi_handler)
-    
-    mesh = pnetcdf_reader.generate_mesh()
+    pnetcdf_io = PnetCDFStateIO(params["input_file"], params["output_file"], mpi_handler)
+    mesh = pnetcdf_io.generate_mesh()
 
     state = create_empty_state(flux_scheme, mesh, mpi_handler.rank)
-    state = pnetcdf_reader.read_state(state, mesh)
+    state = pnetcdf_io.read_state(state, mesh)
+
     boundaries = boundaries = BoundaryManager(params, mesh.local_X, mesh.local_Y)
 
     solver = create_solver_bundle(flux_scheme)
@@ -54,8 +59,9 @@ def run_driver(params: dict):
     integrator_config = integrator.config(cfl, end_time, out_freq, solver, solver_config)
 
     a = time.perf_counter()
-    state = integrator.run_fn(state, integrator_config)
-    #jax.tree_util.tree_map(lambda x: x.block_until_ready(), state)
+
+    state = integrator.run_fn(state, integrator_config, pnetcdf_io, mesh)
+
     b = time.perf_counter()
 
     if mpi_handler.rank == 0:

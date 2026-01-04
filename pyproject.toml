@@ -12,6 +12,8 @@ requires-python = ">=3.9"
 dependencies = [
     "numpy",
     "matplotlib",
+    "xarray",
+    "pyyaml"
 ]
 
 [project.optional-dependencies]

@@ -9,21 +9,18 @@ from mpi4py import MPI
 from PyExner.state.roe_exner_state import RoeExnerState
 from PyExner.utils.constants import g, DRY_TOL, VEL_TOL
 
-@jax.jit
 def _get_theta(_lambda, utilde, ctilde):
     return 3*_lambda**2 - 4*utilde*_lambda + utilde**2 - ctilde**2
 
-@jax.jit
 def _get_approx_lambda(_lambda, atilde, utilde, ctilde):
     theta = _get_theta(_lambda, utilde, ctilde)
 
     numerator = _lambda * theta - ctilde**2 * atilde * utilde 
     denominator = theta - ctilde**2*atilde 
-    denominator = jnp.where(denominator < 1e-2, ctilde**2*atilde, denominator)  
+    denominator = jnp.where(jnp.abs(denominator) < jnp.abs(ctilde**2*atilde), jnp.sign(denominator)*ctilde**2*atilde*0.5, denominator)  
 
     return numerator / denominator
 
-@jax.jit
 def compute_dt(si, sj, nx, ny, dx):
     hi, hui, hvi, zi, gi = si
     hj, huj, hvj, zj, gj = sj

@@ -1,0 +1,52 @@
+end_time: 1
+out_freq: 0.1
+io_freq: 0.1
+cfl: 1.0
+flux_scheme: Roe Exner
+integrator: Forward Euler
+parNx: 1
+parNy: 1
+input_file: subcritical_dambreak_exner.nc
+output_file: subcritical_dambreak_exner_out.nc
+
+boundaries:
+
+  outlet1:
+    type: Transmissive
+    polygon:
+      - [-2.05, -2.05]
+      - [-1.95, -2.05]
+      - [-1.95,  2.05]
+      - [-2.05,  2.05]
+    values: [0.0, 0.0, 0.0, 0.0]
+    normal: [-1.0, 0.0]
+
+  outlet2:
+    type: Transmissive
+    polygon:
+      - [ 1.95, -2.05]
+      - [ 2.05, -2.05]
+      - [ 2.05,  2.05]
+      - [ 1.95,  2.05]
+    values: [0.0, 0.0, 0.0, 0.0]
+    normal: [1.0, 0.0]
+
+  outlet3:
+    type: Transmissive
+    polygon:
+      - [-2.05, -2.05]
+      - [ 2.05, -2.05]
+      - [ 2.05, -1.95]
+      - [-2.05, -1.95]
+    values: [0.0, 0.0, 0.0, 0.0]
+    normal: [0.0, -1.0]
+
+  outlet4:
+    type: Transmissive
+    polygon:
+      - [-2.05,  1.95]
+      - [ 2.05,  1.95]
+      - [ 2.05,  2.05]
+      - [-2.05,  2.05]
+    values: [0.0, 0.0, 0.0, 0.0]
+    normal: [0.0, 1.0]

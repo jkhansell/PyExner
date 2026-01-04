@@ -25,18 +25,32 @@ class PnetCDFStateIO():
         self.comm = self.mpihandler.cart_comm
         self.rank = self.mpihandler.rank
         self.size = self.mpihandler.size
+        self.vars = {}
+        self.numOut = 0
+        
+        self.infile = pnetcdf.File(
+            filename = self.in_file_path,
+            mode = "r",
+            format = "NC_64BIT_DATA", 
+            comm = self.comm,
+            info=None
+        )
 
-    def open(self, file_path, mode):
-        self.dataset = pnetcdf.File(file_path, mode=mode, comm=self.comm, info=None)
+        self.outfile = pnetcdf.File(
+            filename = self.out_file_path,
+            mode = "w",
+            format = "NC_64BIT_DATA",
+            comm = self.comm,
+            info=None
+        )
 
-    def close(self):
-        if self.dataset is not None:
-            self.dataset.close()
+    def __del__(self):
+        self.outfile.close()
 
     def generate_mesh(self):
-        self.open(self.in_file_path, "r")
-        global_Ny = len(self.dataset.dimensions['y'])
-        global_Nx = len(self.dataset.dimensions['x']) 
+                
+        global_Ny = len(self.infile.dimensions['y'])
+        global_Nx = len(self.infile.dimensions['x']) 
 
         y_parts, x_parts = self.mpihandler.dims
         y_coord, x_coord  = self.mpihandler.coords
@@ -54,22 +68,21 @@ class PnetCDFStateIO():
         if y_coord < global_Ny % y_parts:
             local_Ny += 1
 
-        local_y = np.array(self.dataset.variables["y"][y_offset:y_offset+local_Ny]) 
-        local_x = np.array(self.dataset.variables["x"][x_offset:x_offset+local_Nx])
+        self.local_y = np.array(self.infile.variables["y"][y_offset:y_offset+local_Ny]) 
+        self.local_x = np.array(self.infile.variables["x"][x_offset:x_offset+local_Nx])
         
-        dh = round(float((local_x[1:] - local_x[:-1])[0]),5)
+        dh = round(float((self.local_x[1:] - self.local_x[:-1])[0]),5)
 
         if x_parts != 1:
-            local_x = extend_with_ghosts(local_x, dh)
+            self.local_x = extend_with_ghosts(self.local_x, dh)
             local_Nx += 2
 
         if y_parts != 1:
-            local_y = extend_with_ghosts(local_y, dh)
+            self.local_y = extend_with_ghosts(self.local_y, dh)
             local_Ny += 2
 
-
-        local_x = jnp.array(local_x)
-        local_y = jnp.array(local_y)
+        local_x = jnp.array(self.local_x)
+        local_y = jnp.array(self.local_y)
 
         local_X, local_Y = jnp.meshgrid(local_x, local_y, indexing="xy")
 
@@ -87,18 +100,17 @@ class PnetCDFStateIO():
             "global_shape": (global_Ny,global_Nx)
         }
 
-        self.close()
+
         return Mesh2D(**meshdata)
 
     def read_state(self, state_instance, mesh):
         """Populate the fields of the given state instance in-place."""
-        self.open(self.in_file_path, "r")
         new_values = {}
         y_parts, x_parts = self.mpihandler.dims
 
         for f in fields(state_instance):
             name = f.name
-            if name not in self.dataset.variables:
+            if name not in self.infile.variables:
                 raise KeyError(f"Variable '{name}' not found in NetCDF file.")
                         
             has_x_halo = x_parts != 1
@@ -108,10 +120,10 @@ class PnetCDFStateIO():
             local_Nx = mesh.local_Nx - 2 if has_x_halo else mesh.local_Nx
             local_Ny = mesh.local_Ny - 2 if has_y_halo else mesh.local_Ny
 
-            data = jnp.array(self.dataset.variables[name][
+            data = jnp.array(self.infile.variables[name][
                 mesh.y_offset : mesh.y_offset + local_Ny,
                 mesh.x_offset : mesh.x_offset + local_Nx
-            ])
+            ]).astype(jnp.float32)
 
             # Reintroduce halo padding for in-process ghost cells
             if has_x_halo:
@@ -120,18 +132,52 @@ class PnetCDFStateIO():
             if has_y_halo:
                 data = jnp.pad(data, ((1, 1), (0, 0)), mode="edge")
 
-            new_values[name] = data
-        self.close()
+            new_values[name] = data   
+
+
+        # Also initialize output file 
+
+        dim_t = self.outfile.def_dim("t")
+        dim_y = self.outfile.def_dim("y", size=mesh.global_Ny)
+        dim_x = self.outfile.def_dim("x", size=mesh.global_Nx)    
+
+        # define coordinates and fields for outfile
+        var_y = self.outfile.def_var("y", pnetcdf.NC_DOUBLE, (dim_y))
+        var_x = self.outfile.def_var("x", pnetcdf.NC_DOUBLE, (dim_x))
+
+        for f in fields(state_instance):
+            self.vars[f.name] = self.outfile.def_var(f.name, pnetcdf.NC_FLOAT, (dim_t, dim_y, dim_x))
+
+        # exit define mode
+        self.outfile.enddef()
+
+        # write coordinates to outfile
+        start = [mesh.x_offset]
+        count = [local_Nx]
+
+        var_x.put_var_all(
+            self.infile.variables["x"][mesh.x_offset : mesh.x_offset + local_Nx],
+            start = start,
+            count = count
+        )
+        
+        start = [mesh.y_offset]
+        count = [local_Ny]
+
+        var_y.put_var_all(
+            self.infile.variables["y"][mesh.y_offset : mesh.y_offset + local_Ny],
+            start = start, 
+            count = count    
+        )
+
+        # close input file
+        self.infile.close()
 
         return state_instance.replace(**new_values)
 
     def write_state(self, state_instance, mesh):
-        self.open(self.out_file_path, "w")
-
 
         y_parts, x_parts = self.mpihandler.dims
-
-        req_ids = []
 
         has_x_halo = x_parts != 1
         has_y_halo = y_parts != 1
@@ -140,21 +186,12 @@ class PnetCDFStateIO():
         local_Nx = mesh.local_Nx - 2 if has_x_halo else mesh.local_Nx
         local_Ny = mesh.local_Ny - 2 if has_y_halo else mesh.local_Ny
 
-        dim_y = self.dataset.def_dim("y", size=local_Ny)
-        dim_x = self.dataset.def_dim("x", size=local_Nx)
+        start = [self.numOut, mesh.y_offset, mesh.x_offset]
+        count = [1, local_Ny, local_Nx]
 
-        for f in fields(state_instance):
-            name = f.name
-            var = self.dataset.def_var(varname=name, datatype=pnetcdf.NC_FLOAT, dimensions=("y", "x"))
-
-            req_id = var.iput_var(np.asarray(getattr(state_instance, name)))
-            # track the request ID for each write request
-            req_ids.append(req_id)
-        # wait for nonblocking writes to complete
+        state = state_instance.to_host()
+        for f in fields(state):
+            arr = np.ascontiguousarray(jnp.expand_dims(getattr(state, f.name), 0))
+            self.vars[f.name].put_var_all(arr.astype(jnp.float32), start=start, count=count)
         
-        errs = [None] * len(fields(state_instance))
-
-        self.dataset.enddef() # Exit define mode
-        self.dataset.wait_all(len(fields(state_instance)), req_ids, errs)
-            
-        self.close()
+        self.numOut += 1
