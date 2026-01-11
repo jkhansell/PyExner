@@ -11,6 +11,7 @@ class RoeExnerState(BaseState):
     z: jax.Array
     n: jax.Array
     G: jax.Array
+    seds: jax.Array
 
     @classmethod
     def empty(cls, mesh: 'Mesh2D', dtype=jnp.float32) -> "RoeExnerState":
@@ -24,14 +25,15 @@ class RoeExnerState(BaseState):
             hv=zeros,
             z=ones,    # Flat bed default
             n=zeros,
-            G=zeros
+            G=zeros,
+            seds=jnp.zeros((1,1), dtype=dtype)
         )
 
     def replace(self, **kwargs):
         return dc_replace(self, **kwargs)
 
 def RoeExner_state_flatten(state: RoeExnerState):
-    children = (state.h, state.hu, state.hv, state.z, state.n, state.G)
+    children = (state.h, state.hu, state.hv, state.z, state.n, state.G, state.seds)
     return children, None
 
 def RoeExner_state_unflatten(aux, children):

@@ -9,6 +9,108 @@ from mpi4py import MPI
 from PyExner.state.roe_exner_state import RoeExnerState
 from PyExner.utils.constants import g, DRY_TOL, VEL_TOL
 
+import matplotlib.pyplot as plt
+
+def momentum_corrections(state: RoeExnerState, mask):
+    h = state.h
+    z = state.z
+
+    # Pad to prevent wrap-around at the MPI/Domain edges
+    h_pad = jnp.pad(h, 1, mode='edge')
+    z_pad = jnp.pad(z, 1, mode='edge')
+    mask_pad = jnp.pad(mask[0], 1, mode='edge')
+
+    # Neighbors mapped to your definition:
+    # East/West -> Row shifts
+    hWest = h_pad[1:-1, :-2]; hEast = h_pad[1:-1, 2:]
+    zWest = z_pad[1:-1, :-2]; zEast = z_pad[1:-1, 2:]
+    mWest = mask_pad[1:-1, :-2]; mEast = mask_pad[1:-1, 2:]
+    
+    # North (iy=0) / South (iy=Ny-1) -> Column shifts
+    hNorth = h_pad[:-2, 1:-1]; hSouth = h_pad[2:, 1:-1]
+    zNorth = z_pad[:-2, 1:-1]; zSouth = z_pad[2:, 1:-1]
+    mNorth = mask_pad[:-2, 1:-1]; mSouth = mask_pad[2:, 1:-1]
+
+    eta = h + z
+
+    # Check for obstructions in the North-South direction (along ix)
+    # If the neighbor is a wall (mask) or dry bed higher than local water level
+    stop_u = (
+        ((eta < zEast) & (hEast < DRY_TOL)) | 
+        ((eta < zWest) & (hWest < DRY_TOL)) | 
+        mEast |  mWest
+    )
+
+    # Check for obstructions in the East-West direction (along iy)
+    stop_v = (
+        ((eta < zNorth) & (hNorth < DRY_TOL)) | 
+        ((eta < zSouth) & (hSouth < DRY_TOL)) |
+        mNorth | mSouth
+    )
+
+    active = (h > DRY_TOL) & ~mask[0] & ~mask[1]
+    
+    # Enforce u.n = 0 by killing momentum heading into walls or high dry neighbors
+    hu_new = jnp.where(active & ~stop_u, state.hu, 0.0)
+    hv_new = jnp.where(active & ~stop_v, state.hv, 0.0)
+
+    return RoeExnerState(
+        h = state.h, 
+        hu = hu_new, 
+        hv = hv_new, 
+        z = state.z, 
+        n = state.n, 
+        G = state.G,
+        seds=state.seds
+    )
+
+def compute_G(h, hu, hv, n, seds, mask):
+
+    h = jnp.maximum(h, DRY_TOL)
+    hu = jnp.where(h < DRY_TOL, 0.0, hu)
+    hv = jnp.where(h < DRY_TOL, 0.0, hv)
+
+    n  = n
+    # (ny,nx)
+    u = hu / h
+    v = hv / h
+
+    # Lift hydraulics → (1,ny,nx)
+    u = u[None, ...]
+    v = v[None, ...]
+    h = h[None, ...]
+    n = n[None, ...]
+
+    # Sediments → (nseds,1,1)    
+    frac = seds[0][:, None, None]
+    d50    =  seds[1][:, None, None]
+    density = seds[2][:, None, None]
+    k_d = seds[3][:, None, None]
+    k_e = seds[4][:, None, None]
+    theta_c = seds[5][:, None, None]
+    porosity = seds[6].mean() 
+
+    s = density / 1000
+
+    theta_p = (
+        n**2 * (u**2 + v**2)
+        / ((s - 1.0) * d50 * jnp.cbrt(h))
+    )                            # (nseds,ny,nx)
+    theta_p = jnp.maximum(theta_p, 0.0)
+
+    delta_theta = jnp.maximum(theta_p - theta_c, 0.0)
+
+    gamma1 = n**3 * jnp.sqrt(g) / ((s - 1.0) * jnp.sqrt(h))
+    gamma2 = 8.0 * jnp.sqrt(delta_theta) / (theta_p**1.5 + 1e-12)
+    eta_p = k_e*delta_theta*d50 / (s*k_d)
+    gamma3 = s*k_d*eta_p/(k_e*d50)
+
+    G = jnp.sum(frac * gamma1 * gamma2 * gamma3, axis=0)
+    G = 1 / (1 -porosity) * G
+    G = jnp.where(mask[0], 0.0, G)
+
+    return G 
+
 def _get_theta(_lambda, utilde, ctilde):
     return 3*_lambda**2 - 4*utilde*_lambda + utilde**2 - ctilde**2
 
@@ -17,13 +119,21 @@ def _get_approx_lambda(_lambda, atilde, utilde, ctilde):
 
     numerator = _lambda * theta - ctilde**2 * atilde * utilde 
     denominator = theta - ctilde**2*atilde 
-    denominator = jnp.where(jnp.abs(denominator) < jnp.abs(ctilde**2*atilde), jnp.sign(denominator)*ctilde**2*atilde*0.5, denominator)  
+    denominator = jnp.where(jnp.abs(denominator) < jnp.abs(ctilde**2*atilde), jnp.sign(denominator)*2*ctilde**2*atilde*0.5, denominator)  
 
-    return numerator / denominator
+    lambda_ = numerator / denominator
+
+    # Dry-state fix
+    lambda_ = jnp.where(atilde == 0.0, 0.0, lambda_)
+
+    return lambda_
 
 def compute_dt(si, sj, nx, ny, dx):
     hi, hui, hvi, zi, gi = si
     hj, huj, hvj, zj, gj = sj
+    
+    hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL)
+    hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL)
     
     sqrt_i = jnp.sqrt(hi)
     sqrt_j = jnp.sqrt(hj)
@@ -41,8 +151,9 @@ def compute_dt(si, sj, nx, ny, dx):
     vhatj = -uj*ny + vj*nx         # tangent
 
     htilde = 0.5*(hi + hj)
-    utilde = (uhati*sqrt_i + uhatj*sqrt_j)/(sqrt_i + sqrt_j)
-    vtilde = (vhati*sqrt_i + vhatj*sqrt_j)/(sqrt_i + sqrt_j)
+    utilde = (uhati * sqrt_i + uhatj * sqrt_j) / (sqrt_i + sqrt_j)
+    vtilde = (vhati * sqrt_i + vhatj * sqrt_j) / (sqrt_i + sqrt_j) 
+
     ctilde = jnp.sqrt(g*htilde)
     gtilde = 0.5 * (gi + gj)
     atilde = gtilde*(uhati**2 + uhati*uhatj + uhatj**2 + vhati*vhatj)/(jnp.sqrt(hi*hj)) 
@@ -55,15 +166,19 @@ def compute_dt(si, sj, nx, ny, dx):
     lambda_approx_1 = _get_approx_lambda(lambda_1, atilde, utilde, ctilde)
     lambda_approx_4 = _get_approx_lambda(lambda_3, atilde, utilde, ctilde)
 
-    dt = dx / jnp.maximum(jnp.abs(lambda_approx_1), jnp.abs(lambda_approx_4))
+    # Detect degenerate Roe state
+    roe_exner_speed = jnp.maximum(jnp.abs(lambda_approx_1), jnp.abs(lambda_approx_4))
+    degenerate = roe_exner_speed < VEL_TOL
 
-    dt = jnp.min(dt)
+    dt_exner = dx / roe_exner_speed
+    dt_roe = dx / jnp.maximum(jnp.abs(lambda_1), jnp.abs(lambda_3))
+
+    dt = jnp.where(degenerate, dt_roe, dt_exner)
 
     return dt
 
-@jax.jit
-def compute_dt_2D(state: RoeExnerState, mask, dx):
-
+#@jax.jit
+def compute_dt_2D(state: RoeExnerState, dx, mask):
     h, hu, hv, z, G = state.h, state.hu, state.hv, state.z, state.G
 
     s1_x = (
@@ -98,24 +213,36 @@ def compute_dt_2D(state: RoeExnerState, mask, dx):
         G[1:, :]
     )
 
-    dt_x = compute_dt(s1_x, s2_x, 1, 0, dx)
-    dt_y = compute_dt(s1_y, s2_y, 0, -1, dx)
+    nodata_mask_x = mask[0, :, :-1] | mask[0, :, 1:]
+    nodata_mask_y = mask[0, :-1, :] | mask[0, 1:, :]
 
-    dt_x = jnp.where(mask, dt_x, jnp.inf).min()
-    dt_y = jnp.where(mask, dt_y, jnp.inf).min()
+    depth_mask_x = (s1_x[0] >= DRY_TOL) | (s2_x[0] >= DRY_TOL)
+    depth_mask_y = (s1_y[0] >= DRY_TOL) | (s2_y[0] >= DRY_TOL)
+
+    bound_mask_x = mask[1, :, :-1] | mask[1, :, 1:]
+    bound_mask_y = mask[1, :-1, :] | mask[1, 1:, :]
+
+    active_x = depth_mask_x & ~nodata_mask_x #& ~bound_mask_x
+    active_y = depth_mask_y & ~nodata_mask_y #& ~bound_mask_y
+
+    dt_x = compute_dt(s1_x, s2_x, 1, 0, dx)
+    dt_y = compute_dt(s1_y, s2_y, 0,-1, dx)
+
+    dt_x = jnp.where(active_x, dt_x, jnp.inf).min()
+    dt_y = jnp.where(active_y, dt_y, jnp.inf).min()
 
     dt = jnp.minimum(dt_x, dt_y)
 
     return dt
 
-
+#@jax.jit
 @jax.jit
 def roe_solver(si, sj, nx: float, ny: float, dx: float):
     hi, hui, hvi, zi, ni = si
     hj, huj, hvj, zj, nj = sj
 
-    hi = jnp.where(hi > DRY_TOL, hi, 0.0)
-    hj = jnp.where(hj > DRY_TOL, hj, 0.0)
+    hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL)
+    hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL)
 
     sqrt_i = jnp.sqrt(hi)
     sqrt_j = jnp.sqrt(hj)
@@ -243,35 +370,11 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     ], axis=-1)
 
     betas = jnp.einsum("...ji,...i->...j", P_inv, Tn)
-
     
     h_i1star = hi + alphas[...,0] - (betas[...,0]/lambdas[...,0])      # 1st intermediate state
     h_j3star = hj - alphas[...,2] + (betas[...,2]/lambdas[...,2])     # 3rd intermediate state
     
     # Exner formulation requires unmodified source terms to extend up to interaction factors G=0.01
-
-    """# Reconstruction of approximate solution
-
-    beta1min = -(hi+alphas[...,0])*jnp.abs(lambdas[...,0])
-    beta3min = -(hi-alphas[...,0])*jnp.abs(lambdas[...,2])
-
-    dt = dx / jnp.max(jnp.abs(lambdas), axis=2)
-
-    mask_1 = (h_i1star < 0.0) & (jnp.abs(hi) > VEL_TOL)
-    mask_2 = (h_j3star < 0.0) & (jnp.abs(hj) > VEL_TOL)
-
-    dt1star = (dx / 2*lambdas[...,0])*(hi/(hi-h_i1star + VEL_TOL)) 
-    dt3star = (dx / 2*lambdas[...,2])*(hj/(hj-h_j3star + VEL_TOL))
-
-    mask = (h_i1star < 0.0) & (h_j3star > 0.0) & (dt1star < dt)  
-    betas = betas.at[...,0].set(jnp.where(mask, jnp.where(-beta1min >= beta3min, beta1min, betas[...,0]), betas[...,0]))
-    betas = betas.at[...,2].set(jnp.where(mask, -betas[...,0], betas[...,2])) 
-    
-    mask = (h_i1star > 0.0) & (h_j3star < 0.0) & (dt3star < dt)  
-    betas = betas.at[...,2].set(jnp.where(mask, jnp.where(-beta3min >= beta3min, beta1min, betas[...,2]), betas[...,2]))
-    betas = betas.at[...,0].set(jnp.where(mask, -betas[...,2], betas[...,0]))
-
-    # Reconstruction of approximate solution""" 
     
     upwP = jnp.zeros_like(lambdas)
     upwM = jnp.zeros_like(lambdas)
@@ -331,8 +434,7 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
 
     return upwP, upwM
 
-@jax.jit
-def roe_solve_2D(state: RoeExnerState, dt: float, dx: float):
+def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
 
     h, hu, hv, z, n = state.h, state.hu, state.hv, state.z, state.n
 
@@ -371,6 +473,25 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float):
     upwP_x, upwM_x = roe_solver(s1_x, s2_x, 1,  0, dx)
     upwP_y, upwM_y = roe_solver(s1_y, s2_y, 0, -1, dx)
 
+    # check masking per edge vs masking per cell later
+
+    nodata_mask_x = mask[0, :, :-1] | mask[0, :, 1:]
+    nodata_mask_y = mask[0, :-1, :] | mask[0, 1:, :]
+
+    depth_mask_x = (s1_x[0] >= DRY_TOL) | (s2_x[0] >= DRY_TOL)
+    depth_mask_y = (s1_y[0] >= DRY_TOL) | (s2_y[0] >= DRY_TOL)
+
+    bound_mask_x = mask[1, :, :-1] | mask[1, :, 1:]
+    bound_mask_y = mask[1, :-1, :] | mask[1, 1:, :]
+
+    active_x = depth_mask_x & ~nodata_mask_x & ~bound_mask_x
+    active_y = depth_mask_y & ~nodata_mask_y & ~bound_mask_y
+
+    upwP_x = jnp.where(active_x[..., None], upwP_x, 0.0)
+    upwM_x = jnp.where(active_x[..., None], upwM_x, 0.0)
+    upwP_y = jnp.where(active_y[..., None], upwP_y, 0.0)
+    upwM_y = jnp.where(active_y[..., None], upwM_y, 0.0)
+
     # upwinding solution
 
     fluxes = jnp.zeros((h.shape[0], h.shape[1], 3))
@@ -379,7 +500,7 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float):
     fluxes = fluxes.at[:, 1:].add(upwP_x) 
     fluxes = fluxes.at[:-1,:].add(upwM_y)
     fluxes = fluxes.at[1:, :].add(upwP_y)
-    
+
     dh  = fluxes[..., 0]
     dhu = fluxes[..., 1]
     dhv = fluxes[..., 2]
@@ -388,30 +509,30 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float):
     hu_new = state.hu - dt * dhu / dx
     hv_new = state.hv - dt * dhv / dx
 
-    return RoeExnerState(
+    return state.replace(
         h=h_new,
         hu=hu_new,
         hv=hv_new,
-        z=state.z,    # unchanged
-        n=state.n,     # unchanged
-        G=state.G     # unchanged
     )
    
-@jax.jit
+#@jax.jit
 def exner_solver(si, sj,  nx, ny, dx):
     # We will be implementing the Approximately Coupled Solver (ACM) https://doi.org/10.1016/j.advwatres.2021.103931
     hi, hui, hvi, zi, gi = si
     hj, huj, hvj, zj, gj = sj
 
+    hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL)
+    hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL)
+
     sqrt_i = jnp.sqrt(hi)
     sqrt_j = jnp.sqrt(hj)
 
     # Calculate velocities, handling dry beds
-    ui = jnp.where(hi > 1e-8, hui/hi, 0.0)
-    vi = jnp.where(hi > 1e-8, hvi/hi, 0.0)
+    ui = jnp.where(hi >= DRY_TOL, hui/hi, 0.0)
+    vi = jnp.where(hi >= DRY_TOL, hvi/hi, 0.0)
 
-    uj = jnp.where(hj > 1e-8, huj/hj, 0.0)
-    vj = jnp.where(hj > 1e-8, hvj/hj, 0.0)
+    uj = jnp.where(hj >= DRY_TOL, huj/hj, 0.0)
+    vj = jnp.where(hj >= DRY_TOL, hvj/hj, 0.0)
 
     # --- Rotate problem to (normal, tangential) coordinate frame ---
     uhati = ui * nx + vi * ny   # Normal velocity component
@@ -430,7 +551,7 @@ def exner_solver(si, sj,  nx, ny, dx):
 
     dqbhat = gtilde*umagj*uhatj - gtilde*umagi*uhati
 
-    lambda_4 = jnp.where(jnp.abs(dz) > 1e-6, dqbhat / dz, utilde)
+    lambda_4 = jnp.where(jnp.abs(dz) > 1e-4, dqbhat / dz, utilde)
 
     corrector_i = (gtilde - gi)*umagi*uhati
     corrector_j = (gtilde - gj)*umagj*uhatj
@@ -442,10 +563,10 @@ def exner_solver(si, sj,  nx, ny, dx):
 
     return F_exner
 
-@jax.jit
-def exner_solve_2D(state, dt, dx):
+#@jax.jit
+def exner_solve_2D(state, dt, dx, mask):
     h, hu, hv, z, G = state.h, state.hu, state.hv, state.z, state.G
-    
+
     s1_x = (
         h[:,:-1],
         hu[:,:-1],
@@ -478,36 +599,43 @@ def exner_solve_2D(state, dt, dx):
         G[1:, :]
     )
 
+    nodata_mask_x = mask[0, :, :-1] | mask[0, :, 1:]
+    nodata_mask_y = mask[0, :-1, :] | mask[0, 1:, :]
+
+    depth_mask_x = (s1_x[0] >= DRY_TOL) | (s2_x[0] >= DRY_TOL)
+    depth_mask_y = (s1_y[0] >= DRY_TOL) | (s2_y[0] >= DRY_TOL)
+
+    bound_mask_x = mask[1, :, :-1] | mask[1, :, 1:]
+    bound_mask_y = mask[1, :-1, :] | mask[1, 1:, :]
+
+    active_x = depth_mask_x & ~nodata_mask_x & ~bound_mask_x
+    active_y = depth_mask_y & ~nodata_mask_y & ~bound_mask_y
+
     fluxes = jnp.zeros((state.h.shape[0], state.h.shape[1]))
 
     # Calculate the upwinded fluxes at the x-interfaces
     F_x = exner_solver(s1_x, s2_x, 1, 0, dx)
-
-    fluxes = fluxes.at[:, 1:].add(-F_x)            # F_x leaves cell to its right
-    fluxes = fluxes.at[:, :-1].add(F_x)            # F_x enters cell from its left
+    
+    fluxes = fluxes.at[:, 1:].add(jnp.where(active_x, -F_x, 0.0))
+    fluxes = fluxes.at[:, :-1].add(jnp.where(active_x,  F_x, 0.0))
 
     # Calculate the upwinded fluxes at the y-interfaces
     F_y = exner_solver(s1_y, s2_y, 0, -1, dx)
 
-    fluxes = fluxes.at[1:, :].add(-F_y) # F_y enters cell from its bottom
-    fluxes = fluxes.at[:-1, :].add(F_y) # F_y leaves cell to its top
+    fluxes = fluxes.at[1:, :].add(jnp.where(active_y, -F_y, 0.0))
+    fluxes = fluxes.at[:-1, :].add(jnp.where(active_y,  F_y, 0.0))
 
     z_new = state.z - dt * fluxes / dx
 
-    return RoeExnerState(
-        h = state.h, 
-        hu = state.hu, 
-        hv = state.hv, 
+    return state.replace(
         z = z_new, 
-        n = state.n, 
-        G = state.G, 
     )
 
 def make_halo_exchange(mpi_handler):
     neighbors = mpi_handler.neighbors
     comm = mpi_handler.cart_comm
 
-    @jax.jit
+    #@jax.jit
     def halo_exchange(arr):
         send_order = (
             "west",

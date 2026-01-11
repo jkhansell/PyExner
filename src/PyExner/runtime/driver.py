@@ -47,20 +47,19 @@ def run_driver(config_path: str):
     mesh = pnetcdf_io.generate_mesh()
 
     state = create_empty_state(flux_scheme, mesh, mpi_handler.rank)
-    state = pnetcdf_io.read_state(state, mesh)
+    state = pnetcdf_io.read_state(state, mesh, params)
 
-    boundaries = boundaries = BoundaryManager(params, mesh.local_X, mesh.local_Y)
+    boundaries = BoundaryManager(params, mesh.local_X, mesh.local_Y)
 
     solver = create_solver_bundle(flux_scheme)
     solver_config = solver.config(state, mpi_handler, boundaries, mesh.dh)
-    state = solver.init_fn(state, solver_config)
 
     integrator = create_integrator_bundle(time_scheme)
     integrator_config = integrator.config(cfl, end_time, out_freq, solver, solver_config)
 
     a = time.perf_counter()
 
-    state = integrator.run_fn(state, integrator_config, pnetcdf_io, mesh)
+    state = integrator.run_fn(state, integrator_config, pnetcdf_io, mesh, boundaries.boundary_mask)
 
     b = time.perf_counter()
 

@@ -42,7 +42,6 @@ class BaseState:
     
     def to_host(self):
         def _copy(x):
-            arr = jax.device_get(x)
-            return np.ascontiguousarray(arr)
+            return jax.device_get(x)
 
         return jax.tree_util.tree_map(_copy, self)

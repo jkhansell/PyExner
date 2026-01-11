@@ -21,10 +21,10 @@ ATOL_ITERATIVE = 1e-8
 FLUX_TOL = 1e-12
 
 # Tolerance for integration methods
-TIMESTEP_TOL = 1e-12
+TIMESTEP_TOL = 1e-16
 
 # Tolerance for dry domains
-DRY_TOL = 1e-6
+DRY_TOL = 1e-4
 
 # Tolerance for slow velocities
 VEL_TOL = 1e-12

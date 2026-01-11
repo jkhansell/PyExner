@@ -68,7 +68,7 @@ class PnetCDFStateIO():
         if y_coord < global_Ny % y_parts:
             local_Ny += 1
 
-        self.local_y = np.array(self.infile.variables["y"][y_offset:y_offset+local_Ny]) 
+        self.local_y = np.array(self.infile.variables["y"][y_offset:y_offset+local_Ny])
         self.local_x = np.array(self.infile.variables["x"][x_offset:x_offset+local_Nx])
         
         dh = round(float((self.local_x[1:] - self.local_x[:-1])[0]),5)
@@ -81,11 +81,11 @@ class PnetCDFStateIO():
             self.local_y = extend_with_ghosts(self.local_y, dh)
             local_Ny += 2
 
-        local_x = jnp.array(self.local_x)
-        local_y = jnp.array(self.local_y)
+        local_x = jnp.array(self.local_x) + dh/2
+        local_y = jnp.array(self.local_y) - dh/2
 
         local_X, local_Y = jnp.meshgrid(local_x, local_y, indexing="xy")
-
+        
         meshdata = {
             "global_Ny": global_Ny,
             "global_Nx": global_Nx,
@@ -100,26 +100,59 @@ class PnetCDFStateIO():
             "global_shape": (global_Ny,global_Nx)
         }
 
-
         return Mesh2D(**meshdata)
 
-    def read_state(self, state_instance, mesh):
+    def read_state(self, state_instance, mesh, config):
         """Populate the fields of the given state instance in-place."""
         new_values = {}
         y_parts, x_parts = self.mpihandler.dims
+        has_x_halo = x_parts != 1
+        has_y_halo = y_parts != 1
+
+        # Remove halos from dataset input if they are expected to be exchanged via MPI
+        local_Nx = mesh.local_Nx - 2 if has_x_halo else mesh.local_Nx
+        local_Ny = mesh.local_Ny - 2 if has_y_halo else mesh.local_Ny
 
         for f in fields(state_instance):
             name = f.name
+
             if name not in self.infile.variables:
+                if name == "G":
+                    if type(config["erosion"]["grass_factor"]) is str:
+                        new_values[name] = jnp.zeros((local_Ny, local_Nx))
+                    else:
+                        new_values[name] = config["erosion"]["grass_factor"]*jnp.ones((local_Ny, local_Nx))
+                    continue        
+
+                if name == "seds":
+                    if type(config["erosion"]["grass_factor"]) is str:
+                        if config["erosion"]["grass_factor"] == "MPM":
+                            theta_c = 0.047
+                        else: 
+                            # default to MPM formulation -- To be developed 
+                            theta_c = 0.047
+
+                        sediments = []
+                        for key in config["erosion"]["sediments"].keys():
+                            sed_i = [
+                                config["erosion"]["sediments"][key]["fraction"],
+                                config["erosion"]["sediments"][key]["diameter"],
+                                config["erosion"]["sediments"][key]["density"],
+                                config["erosion"]["sediments"][key]["deposition_flux"],
+                                config["erosion"]["sediments"][key]["erosion_flux"],
+                                theta_c,
+                                config["erosion"]["bulk_porosity"],
+                            ]                                
+                            sediments.append(sed_i)
+
+                        new_values[name] = jnp.array(sediments).T
+                    else:
+                        new_values[name] = jnp.empty(1)
+                    
+                    continue
+
                 raise KeyError(f"Variable '{name}' not found in NetCDF file.")
                         
-            has_x_halo = x_parts != 1
-            has_y_halo = y_parts != 1
-
-            # Remove halos from dataset input if they are expected to be exchanged via MPI
-            local_Nx = mesh.local_Nx - 2 if has_x_halo else mesh.local_Nx
-            local_Ny = mesh.local_Ny - 2 if has_y_halo else mesh.local_Ny
-
             data = jnp.array(self.infile.variables[name][
                 mesh.y_offset : mesh.y_offset + local_Ny,
                 mesh.x_offset : mesh.x_offset + local_Nx
@@ -132,8 +165,7 @@ class PnetCDFStateIO():
             if has_y_halo:
                 data = jnp.pad(data, ((1, 1), (0, 0)), mode="edge")
 
-            new_values[name] = data   
-
+            new_values[name] = data
 
         # Also initialize output file 
 
@@ -146,6 +178,8 @@ class PnetCDFStateIO():
         var_x = self.outfile.def_var("x", pnetcdf.NC_DOUBLE, (dim_x))
 
         for f in fields(state_instance):
+            if f.name == "seds":
+                continue
             self.vars[f.name] = self.outfile.def_var(f.name, pnetcdf.NC_FLOAT, (dim_t, dim_y, dim_x))
 
         # exit define mode
@@ -175,7 +209,7 @@ class PnetCDFStateIO():
 
         return state_instance.replace(**new_values)
 
-    def write_state(self, state_instance, mesh):
+    def write_state(self, state_instance, mesh, mask):
 
         y_parts, x_parts = self.mpihandler.dims
 
@@ -191,7 +225,12 @@ class PnetCDFStateIO():
 
         state = state_instance.to_host()
         for f in fields(state):
-            arr = np.ascontiguousarray(jnp.expand_dims(getattr(state, f.name), 0))
+            if f.name == "seds":
+                continue
+            
+            arr = jnp.where(mask, jnp.nan, getattr(state, f.name))
+            arr = np.ascontiguousarray(jnp.expand_dims(arr, 0))
+
             self.vars[f.name].put_var_all(arr.astype(jnp.float32), start=start, count=count)
         
         self.numOut += 1

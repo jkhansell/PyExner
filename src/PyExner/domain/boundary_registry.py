@@ -8,7 +8,6 @@ import traceback
 import matplotlib.pyplot as plt
 from mpi4py import MPI
 
-
 BOUNDARY_REGISTRY = {}
 
 def register_boundary(name):
@@ -23,7 +22,7 @@ def point_in_polygon(point, polygon):
     xi, yi = polygon[:, 0], polygon[:, 1]
     xj, yj = jnp.roll(xi, 1), jnp.roll(yi, 1)
 
-    denom = jnp.where(jnp.abs(yj - yi) < 1e-12, 1e-12, yj - yi)
+    denom = jnp.where(jnp.abs(yj - yi) < 1e-14, 1e-14, yj - yi)
     test_x = (xj - xi) * (y - yi) / denom + xi
     intersect = ((yi > y) != (yj > y)) & (x < test_x)
 
@@ -41,10 +40,21 @@ def compute_label_mask(points, polygons):
     """
     point_mask_fn = jax.vmap(lambda pt, poly: point_in_polygon(pt, poly), in_axes=(0, None))
     polygon_mask_fn = jax.vmap(lambda poly: point_mask_fn(points, poly), in_axes=0)
+    
     return polygon_mask_fn(polygons)
 
 def compute_reflective_indices(mask: jnp.ndarray, normal: jnp.ndarray):
-    shift = -jnp.rint(jnp.flip(normal))
+    # To get to interior cells, move in direction of -normal
+    # We need a shift in [dy, dx]
+    dx = -jnp.round(normal[0]).astype(jnp.int32)
+    
+    # In raster, y-index (row) usually increases DOWNWARDS. 
+    # If ny=1 (upward normal), we need to move interior (down), which is +dy.
+    # If ny=-1 (downward normal), we need to move interior (up), which is -dy.
+    dy = jnp.round(normal[1]).astype(jnp.int32) 
+    
+    shift = jnp.array([dy, dx])
+    
     boundary_cells = jnp.argwhere(mask)
     interior_cells = (boundary_cells + shift).astype(jnp.int32)
 
@@ -79,7 +89,12 @@ class BoundaryManager:
 
         for key in self.boundary_specs:
             self.names.append(key)
-            boundary_values.append(jnp.array(self.boundary_specs[key]["values"]))
+            values_numeric = jnp.array([
+                jnp.nan if str(v).lower() == "nan" else float(v) 
+                for v in self.boundary_specs[key]["values"]
+            ], dtype=jnp.float32)
+
+            boundary_values.append(jnp.array(values_numeric))
             normals.append(jnp.array(self.boundary_specs[key]["normal"]))
             polygons.append(jnp.array(self.boundary_specs[key]["polygon"]))
 
@@ -94,30 +109,34 @@ class BoundaryManager:
             len(polygons), self.X.shape[0], self.X.shape[1]
         )
 
+        self.boundary_mask = masks.any(axis=0)
+
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
 
         # Instantiate handler objects
         for i, key in enumerate(self.boundary_specs.keys()):
             btype = self.flux_scheme+" "+self.boundary_specs[key]["type"]
+            normal = normals[i]
+            mask = masks[i] 
 
             try:
                 handler_cls = BOUNDARY_REGISTRY[btype]
-                if btype == "Roe Reflective" or "Roe Transmissive" :
-                    boundary_idx, interior_idx = compute_reflective_indices(masks[i], normals[i])
+                if "Reflective" in btype or "Transmissive" in btype:
+                    b_idx, i_idx = compute_reflective_indices(mask, normal)
+                    
                     handler = handler_cls(
-                        mask=masks[i],
-                        normal=normals[i],
-                        boundary_indices=boundary_idx,
-                        interior_indices=interior_idx,
+                        mask=mask,
+                        normal=normal,
+                        boundary_indices=b_idx,
+                        interior_indices=i_idx,
                     )
                 else:
                     handler = handler_cls(
-                        mask=masks[i],
-                        normal=normals[i],
-                        values=boundary_values
+                        mask=mask,
+                        normal=normal,
+                        values=boundary_values[i]
                     )
-
                 self.boundary_handlers.append(handler)
 
             except KeyError:

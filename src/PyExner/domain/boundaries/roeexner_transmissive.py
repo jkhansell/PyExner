@@ -26,21 +26,19 @@ class RoeExner_TransmissiveBoundary:
 
         # Copy scalar fields
         h_new = state.h.at[by, bx].set(state.h[iy, ix])
+        hu_new = state.h.at[by, bx].set(state.hu[iy, ix])
+        hv_new = state.h.at[by, bx].set(state.hv[iy, ix])
         z_new = state.z.at[by, bx].set(state.z[iy, ix])
-        n_new = state.n.at[by, bx].set(state.n[iy, ix])
 
-        # Copy momentum fields from interior
-        hu_int = state.hu[iy, ix]
-        hv_int = state.hv[iy, ix]
-
-        # Reflect normal component
-        hu_ref = hu_int
-        hv_ref = hv_int
-
-        hu_new = state.hu.at[by, bx].set(hu_ref)
-        hv_new = state.hv.at[by, bx].set(hv_ref)
-
-        return RoeExnerState(h=h_new, hu=hu_new, hv=hv_new, z=z_new, n=state.n, G=state.G)
+        return RoeExnerState(
+            h=h_new, 
+            hu=hu_new, 
+            hv=hv_new, 
+            z=z_new, 
+            n=state.n, 
+            G=state.G, 
+            seds=state.seds
+        )
 
 def RoeExner_TransmissiveBoundary_flatten(b: RoeExner_TransmissiveBoundary):
     children = (b.mask, b.normal, b.interior_indices, b.boundary_indices)

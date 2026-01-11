@@ -1,7 +1,6 @@
 end_time: 1
 out_freq: 0.1
-io_freq: 0.1
-cfl: 1.0
+cfl: 1.0 # 0.5
 flux_scheme: Roe Exner
 integrator: Forward Euler
 parNx: 1
