@@ -62,36 +62,37 @@ def init_fn_roeexner(state: RoeExnerState, mask, config: SolverConfig) -> RoeExn
 
 #@partial(jax.jit, static_argnums=(4,))
 def step_fn_roeexner(state: RoeExnerState, time: float, dt: float, mask, config: SolverConfig) -> RoeExnerState:    
-    # 1. Solve the Shallow Water Equations (Hydrodynamics)    
+    # Step 1: Solve hydrodynamics
     state = roe_solve_2D(state, dt, config.dx, mask)
     
-    # 2. APPLY BOUNDARY CONDITIONS FIRST
-    # This fills the ghost cells ( reflective / slip / etc. ) 
-    # so the halo exchange knows what to send to neighbors.
+    # Step 2: Apply boundary conditions FIRST (fills ghost cells)
+    state = config.boundaries.apply(state, time)
     
-    h = config.halo_exchange(state.h)
-    
+    # Step 3: Momentum corrections (uses boundary-corrected values)
     state = momentum_corrections(state, mask)
     
+    # Step 4: Now halo exchange (sends corrected values to neighbors)
+    h = config.halo_exchange(state.h)
     hu = config.halo_exchange(state.hu)
-    hv = config.halo_exchange(state.hv) 
+    hv = config.halo_exchange(state.hv)
+    #z = config.halo_exchange(state.z)
+    #n = config.halo_exchange(state.n)
+    
     state = state.replace(h=h, hu=hu, hv=hv)
 
-    state = config.boundaries.apply(state, time)
-
-
-    G = compute_G(state.h, state.hu, state.hv, state.n, state.seds, mask)    
+    # Step 5: Compute morphodynamics source term
+    G = compute_G(state. h, state.hu, state.hv, state.n, state.seds, mask)    
     G = config.halo_exchange(G) 
     state = state.replace(G=G) 
 
-    # 6. Solve Exner (Morphodynamics)
-    # Exner now sees the CORRECTED momentum and BC-compliant hydraulics
+    # Step 6: Solve Exner (bed evolution)
     state = exner_solve_2D(state, dt, config.dx, mask)
     
-    # Final sync of the new bed level
+    # Step 7: Final halo sync of bed level
     z_final = config.halo_exchange(state.z)
 
     return state.replace(z=z_final) 
+
 
 def compute_dt_roeexner(state: RoeExnerState, cfl: float, mask: jax.Array, config: SolverConfig) -> float:
     local_dt = cfl * compute_dt_2D(state, config.dx, mask)

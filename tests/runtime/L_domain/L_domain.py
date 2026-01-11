@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 def L_domain():
     Lx = 6
     Ly = 0.5
-    dh = 0.01
+    dh = 0.005
 
     x_range = [0, Lx]
     y_range = [0, Ly]

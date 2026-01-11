@@ -219,11 +219,8 @@ def compute_dt_2D(state: RoeExnerState, dx, mask):
     depth_mask_x = (s1_x[0] >= DRY_TOL) | (s2_x[0] >= DRY_TOL)
     depth_mask_y = (s1_y[0] >= DRY_TOL) | (s2_y[0] >= DRY_TOL)
 
-    bound_mask_x = mask[1, :, :-1] | mask[1, :, 1:]
-    bound_mask_y = mask[1, :-1, :] | mask[1, 1:, :]
-
-    active_x = depth_mask_x & ~nodata_mask_x #& ~bound_mask_x
-    active_y = depth_mask_y & ~nodata_mask_y #& ~bound_mask_y
+    active_x = depth_mask_x & ~nodata_mask_x 
+    active_y = depth_mask_y & ~nodata_mask_y 
 
     dt_x = compute_dt(s1_x, s2_x, 1, 0, dx)
     dt_y = compute_dt(s1_y, s2_y, 0,-1, dx)
@@ -481,11 +478,8 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
     depth_mask_x = (s1_x[0] >= DRY_TOL) | (s2_x[0] >= DRY_TOL)
     depth_mask_y = (s1_y[0] >= DRY_TOL) | (s2_y[0] >= DRY_TOL)
 
-    bound_mask_x = mask[1, :, :-1] | mask[1, :, 1:]
-    bound_mask_y = mask[1, :-1, :] | mask[1, 1:, :]
-
-    active_x = depth_mask_x & ~nodata_mask_x & ~bound_mask_x
-    active_y = depth_mask_y & ~nodata_mask_y & ~bound_mask_y
+    active_x = depth_mask_x & ~nodata_mask_x
+    active_y = depth_mask_y & ~nodata_mask_y
 
     upwP_x = jnp.where(active_x[..., None], upwP_x, 0.0)
     upwM_x = jnp.where(active_x[..., None], upwM_x, 0.0)
@@ -551,7 +545,7 @@ def exner_solver(si, sj,  nx, ny, dx):
 
     dqbhat = gtilde*umagj*uhatj - gtilde*umagi*uhati
 
-    lambda_4 = jnp.where(jnp.abs(dz) > 1e-4, dqbhat / dz, utilde)
+    lambda_4 = jnp.where(jnp.abs(dz) > 1e-6, dqbhat / dz, utilde)
 
     corrector_i = (gtilde - gi)*umagi*uhati
     corrector_j = (gtilde - gj)*umagj*uhatj
@@ -605,11 +599,8 @@ def exner_solve_2D(state, dt, dx, mask):
     depth_mask_x = (s1_x[0] >= DRY_TOL) | (s2_x[0] >= DRY_TOL)
     depth_mask_y = (s1_y[0] >= DRY_TOL) | (s2_y[0] >= DRY_TOL)
 
-    bound_mask_x = mask[1, :, :-1] | mask[1, :, 1:]
-    bound_mask_y = mask[1, :-1, :] | mask[1, 1:, :]
-
-    active_x = depth_mask_x & ~nodata_mask_x & ~bound_mask_x
-    active_y = depth_mask_y & ~nodata_mask_y & ~bound_mask_y
+    active_x = depth_mask_x & ~nodata_mask_x
+    active_y = depth_mask_y & ~nodata_mask_y
 
     fluxes = jnp.zeros((state.h.shape[0], state.h.shape[1]))
 
@@ -626,9 +617,10 @@ def exner_solve_2D(state, dt, dx, mask):
     fluxes = fluxes.at[:-1, :].add(jnp.where(active_y,  F_y, 0.0))
 
     z_new = state.z - dt * fluxes / dx
+    z_new = jnp.clip(z_new, min=0.0) 
 
     return state.replace(
-        z = z_new, 
+        z = z_new 
     )
 
 def make_halo_exchange(mpi_handler):
