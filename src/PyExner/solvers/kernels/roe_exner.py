@@ -545,7 +545,7 @@ def exner_solver(si, sj,  nx, ny, dx):
 
     dqbhat = gtilde*umagj*uhatj - gtilde*umagi*uhati
 
-    lambda_4 = jnp.where(jnp.abs(dz) > 1e-6, dqbhat / dz, utilde)
+    lambda_4 = jnp.where(jnp.abs(dz) > 1e-4, dqbhat / dz, utilde)
 
     corrector_i = (gtilde - gi)*umagi*uhati
     corrector_j = (gtilde - gj)*umagj*uhatj
@@ -606,18 +606,16 @@ def exner_solve_2D(state, dt, dx, mask):
 
     # Calculate the upwinded fluxes at the x-interfaces
     F_x = exner_solver(s1_x, s2_x, 1, 0, dx)
-    
-    fluxes = fluxes.at[:, 1:].add(jnp.where(active_x, -F_x, 0.0))
-    fluxes = fluxes.at[:, :-1].add(jnp.where(active_x,  F_x, 0.0))
-
-    # Calculate the upwinded fluxes at the y-interfaces
     F_y = exner_solver(s1_y, s2_y, 0, -1, dx)
-
-    fluxes = fluxes.at[1:, :].add(jnp.where(active_y, -F_y, 0.0))
-    fluxes = fluxes.at[:-1, :].add(jnp.where(active_y,  F_y, 0.0))
+    F_x = jnp.where(active_x, F_x, 0.0)
+    F_y = jnp.where(active_y, F_y, 0.0)
+    
+    fluxes = fluxes.at[:, 1:].add(-F_x)
+    fluxes = fluxes.at[:,:-1].add(F_x)
+    fluxes = fluxes.at[1:, :].add(-F_y)
+    fluxes = fluxes.at[:-1,:].add(F_y)
 
     z_new = state.z - dt * fluxes / dx
-    z_new = jnp.clip(z_new, min=0.0) 
 
     return state.replace(
         z = z_new 

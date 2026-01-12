@@ -90,6 +90,7 @@ def step_fn_roeexner(state: RoeExnerState, time: float, dt: float, mask, config:
     
     # Step 7: Final halo sync of bed level
     z_final = config.halo_exchange(state.z)
+    state = config.boundaries.apply(state, time)
 
     return state.replace(z=z_final) 
 
