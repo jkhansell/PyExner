@@ -122,7 +122,10 @@ class PnetCDFStateIO():
                         new_values[name] = jnp.zeros((local_Ny, local_Nx))
                     else:
                         new_values[name] = config["erosion"]["grass_factor"]*jnp.ones((local_Ny, local_Nx))
-                    continue        
+                    continue    
+
+                if name == "n_b": 
+                    continue    
 
                 if name == "seds":
                     if type(config["erosion"]["grass_factor"]) is str:

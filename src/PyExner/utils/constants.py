@@ -3,7 +3,6 @@
 # General machine epsilon for float32 and float64 (can import from jax.numpy if desired)
 import jax.numpy as jnp
 
-
 # ----------------------- Tolerances -----------------------
 # Relative and absolute tolerances for solver operations
 RTOL_DEFAULT = 1e-6
@@ -21,13 +20,14 @@ ATOL_ITERATIVE = 1e-8
 FLUX_TOL = 1e-12
 
 # Tolerance for integration methods
-TIMESTEP_TOL = 1e-16
+TIMESTEP_TOL = 5e-7
 
 # Tolerance for dry domains
-DRY_TOL = 1e-4
+DRY_TOL = 1e-3
+SED_TOL = 1e-6
+VEL_TOL = 1e-6
 
 # Tolerance for slow velocities
-VEL_TOL = 1e-12
 # ----------------------- Tolerances -----------------------
 # ----------------------- Constants -----------------------
 g = 9.81

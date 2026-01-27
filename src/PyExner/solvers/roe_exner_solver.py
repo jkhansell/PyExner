@@ -13,7 +13,7 @@ from PyExner.state.roe_exner_state import RoeExnerState
 from PyExner.solvers.kernels.roe_exner import (
     compute_dt_2D, roe_solve_2D, 
     exner_solve_2D, 
-    make_halo_exchange, compute_G,
+    make_halo_exchange, compute_G, compute_n,
     momentum_corrections
 )
 from PyExner.solvers.registry import SolverConfig, SolverBundle, register_solver_bundle
@@ -50,54 +50,62 @@ def init_fn_roeexner(state: RoeExnerState, mask, config: SolverConfig) -> RoeExn
     h = config.halo_exchange(state.h)
     hu = config.halo_exchange(state.hu)
     hv = config.halo_exchange(state.hv)
-    z = config.halo_exchange(state.z)
     n = config.halo_exchange(state.n)
+    z = config.halo_exchange(state.z)
+    z_b = config.halo_exchange(state.z_b)
+    n_b = compute_n(state.n, z_b, state.seds)
+    n_b = config.halo_exchange(n_b)
 
-    state = state.replace(h=h, hu=hu, hv=hv, z=z, n=n)
+    state = state.replace(h=h, hu=hu, hv=hv, z=z, z_b=z_b, n=n, n_b=n_b)
     
-    G = compute_G(state.h, state.hu, state.hv, state.n, state.seds, mask)
+    G = compute_G(state.h, state.hu, state.hv, state.seds, mask)
     G = config.halo_exchange(G)
 
-    return state.replace(G=G)
+    state = state.replace(G=G)
+    state = config.boundaries.apply(state, 0.0)
+    return state 
 
-#@partial(jax.jit, static_argnums=(4,))
 def step_fn_roeexner(state: RoeExnerState, time: float, dt: float, mask, config: SolverConfig) -> RoeExnerState:    
     # Step 1: Solve hydrodynamics
     state = roe_solve_2D(state, dt, config.dx, mask)
-    
-    # Step 2: Apply boundary conditions FIRST (fills ghost cells)
-    state = config.boundaries.apply(state, time)
-    
-    # Step 3: Momentum corrections (uses boundary-corrected values)
+
+    # Step 2: Momentum corrections
     state = momentum_corrections(state, mask)
+
+    # Step 3: Apply boundary conditions   
+    state = config.boundaries.apply(state, time)
     
     # Step 4: Now halo exchange (sends corrected values to neighbors)
     h = config.halo_exchange(state.h)
     hu = config.halo_exchange(state.hu)
     hv = config.halo_exchange(state.hv)
-    #z = config.halo_exchange(state.z)
-    #n = config.halo_exchange(state.n)
     
     state = state.replace(h=h, hu=hu, hv=hv)
 
     # Step 5: Compute morphodynamics source term
-    G = compute_G(state. h, state.hu, state.hv, state.n, state.seds, mask)    
+    G = compute_G(state.h, state.hu, state.hv, state.seds, mask)    
     G = config.halo_exchange(G) 
-    state = state.replace(G=G) 
+    state = state.replace(G=G)
 
     # Step 6: Solve Exner (bed evolution)
     state = exner_solve_2D(state, dt, config.dx, mask)
     
     # Step 7: Final halo sync of bed level
-    z_final = config.halo_exchange(state.z)
+    z_b = config.halo_exchange(state.z_b)
+    state = state.replace(z_b=z_b)
+
+    n_b = compute_n(state.n, state.z_b, state.seds)
+    n_b = config.halo_exchange(n_b)
+    state = state.replace(n_b=n_b)
+
     state = config.boundaries.apply(state, time)
 
-    return state.replace(z=z_final) 
-
+    return state
 
 def compute_dt_roeexner(state: RoeExnerState, cfl: float, mask: jax.Array, config: SolverConfig) -> float:
     local_dt = cfl * compute_dt_2D(state, config.dx, mask)
     global_dt = mpi4jax.allreduce(local_dt, op=MPI.MIN, comm=config.mpi_handler.cart_comm)
+    global_dt = jnp.maximum(global_dt, 1e-6)
     return global_dt
 
 @register_solver_bundle("Roe Exner")

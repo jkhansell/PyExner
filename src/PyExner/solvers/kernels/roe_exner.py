@@ -7,13 +7,13 @@ from mpi4py import MPI
 
 #local imports
 from PyExner.state.roe_exner_state import RoeExnerState
-from PyExner.utils.constants import g, DRY_TOL, VEL_TOL
+from PyExner.utils.constants import g, DRY_TOL, VEL_TOL, SED_TOL
 
 import matplotlib.pyplot as plt
 
 def momentum_corrections(state: RoeExnerState, mask):
     h = state.h
-    z = state.z
+    z = state.z + state.z_b
 
     # Pad to prevent wrap-around at the MPI/Domain edges
     h_pad = jnp.pad(h, 1, mode='edge')
@@ -48,29 +48,31 @@ def momentum_corrections(state: RoeExnerState, mask):
         mNorth | mSouth
     )
 
-    active = (h > DRY_TOL) & ~mask[0] & ~mask[1]
+    active = (h > DRY_TOL) & ~mask[0]
     
     # Enforce u.n = 0 by killing momentum heading into walls or high dry neighbors
     hu_new = jnp.where(active & ~stop_u, state.hu, 0.0)
     hv_new = jnp.where(active & ~stop_v, state.hv, 0.0)
 
-    return RoeExnerState(
-        h = state.h, 
+    return state.replace(
         hu = hu_new, 
         hv = hv_new, 
-        z = state.z, 
-        n = state.n, 
-        G = state.G,
-        seds=state.seds
     )
 
-def compute_G(h, hu, hv, n, seds, mask):
+def compute_n(n, z_b, seds):
+   
+    frac = seds[0][:, None, None]
+    d50 = seds[1][:, None, None]
+    d50 = jnp.mean(d50 * frac , axis=0)
+    
+    np = d50**(1/6)/21.1
+
+    return jnp.where(z_b > SED_TOL, np, n)
+
+def compute_G(h, hu, hv, seds, mask):
 
     h = jnp.maximum(h, DRY_TOL)
-    hu = jnp.where(h < DRY_TOL, 0.0, hu)
-    hv = jnp.where(h < DRY_TOL, 0.0, hv)
 
-    n  = n
     # (ny,nx)
     u = hu / h
     v = hv / h
@@ -79,7 +81,6 @@ def compute_G(h, hu, hv, n, seds, mask):
     u = u[None, ...]
     v = v[None, ...]
     h = h[None, ...]
-    n = n[None, ...]
 
     # Sediments → (nseds,1,1)    
     frac = seds[0][:, None, None]
@@ -90,26 +91,29 @@ def compute_G(h, hu, hv, n, seds, mask):
     theta_c = seds[5][:, None, None]
     porosity = seds[6].mean() 
 
+    np = d50**(1/6)/21.1
+
     s = density / 1000
 
     theta_p = (
-        n**2 * (u**2 + v**2)
+        np**2 * (u**2 + v**2)
         / ((s - 1.0) * d50 * jnp.cbrt(h))
     )                            # (nseds,ny,nx)
     theta_p = jnp.maximum(theta_p, 0.0)
 
     delta_theta = jnp.maximum(theta_p - theta_c, 0.0)
 
-    gamma1 = n**3 * jnp.sqrt(g) / ((s - 1.0) * jnp.sqrt(h))
-    gamma2 = 8.0 * jnp.sqrt(delta_theta) / (theta_p**1.5 + 1e-12)
+    gamma1 = np**3 * jnp.sqrt(g) / ((s - 1.0) * jnp.sqrt(h))
+    gamma2 = 8.0 * jnp.sqrt(delta_theta) / (theta_p**1.5 + 1e-5)
     eta_p = k_e*delta_theta*d50 / (s*k_d)
     gamma3 = s*k_d*eta_p/(k_e*d50)
 
     G = jnp.sum(frac * gamma1 * gamma2 * gamma3, axis=0)
     G = 1 / (1 -porosity) * G
     G = jnp.where(mask[0], 0.0, G)
+    G = jnp.where(h[0] > DRY_TOL, G, 0.0)
 
-    return G 
+    return G
 
 def _get_theta(_lambda, utilde, ctilde):
     return 3*_lambda**2 - 4*utilde*_lambda + utilde**2 - ctilde**2
@@ -119,14 +123,57 @@ def _get_approx_lambda(_lambda, atilde, utilde, ctilde):
 
     numerator = _lambda * theta - ctilde**2 * atilde * utilde 
     denominator = theta - ctilde**2*atilde 
-    denominator = jnp.where(jnp.abs(denominator) < jnp.abs(ctilde**2*atilde), jnp.sign(denominator)*2*ctilde**2*atilde*0.5, denominator)  
+    denominator = jnp.where(jnp.abs(denominator) < jnp.abs(ctilde**2*atilde)*0.08, jnp.sign(denominator)*jnp.abs(ctilde**2*atilde)*0.08, denominator)  
 
     lambda_ = numerator / denominator
 
     # Dry-state fix
-    lambda_ = jnp.where(atilde == 0.0, 0.0, lambda_)
+    lambda_ = jnp.where(atilde <= 1e-6, 0.0, lambda_)
 
     return lambda_
+
+def _get_lambda(utilde, atilde, ctilde):
+    """
+    Solves cubic polynomial 
+    R_𝜆=-𝜆[(𝑢 - ̃𝜆)^2 - ̃𝑐^2] + ̃𝑐^2 ̃𝑎 (𝜆− ̃𝑢) = 0
+
+    using Cardano-Vieta formulas
+    """
+
+    a = -1 
+    b = -2*utilde
+    c = (1+atilde)*ctilde**2-utilde**2
+    d = -ctilde**2*atilde*utilde
+
+    p = (3*a*c - b**2)/(3*a**2)
+    q = (2*b**3 - 9*a*b*c + 27*a**2*d)/(27*a**3)
+
+    #delta = q**2 + 4*p**3 / 27
+
+    # get the solutions 
+
+    # Trigonometric solution
+    cos_theta = jnp.clip((3*q)/(2*p) * jnp.sqrt(-3/p), -1.0, 1.0)
+    theta = jnp.arccos(cos_theta)
+    
+    sqrt_term = 2 * jnp.sqrt(-p/3)
+    shift = -b/(3*a)
+    
+    # The three roots from trigonometric formula:
+    # t_k = 2√(-p/3) cos((θ + 2πk)/3) for k = 0, 1, 2
+    #
+    # cos((θ + 0)/3)     → always in [0, π/3]     → cos is largest
+    # cos((θ + 2π)/3)    → always in [2π/3, π]    → cos is smallest  
+    # cos((θ + 4π)/3)    → always in [4π/3, 5π/3] → cos is middle
+    
+    # So we can directly compute min and max without sorting!
+    lambda_max = sqrt_term * jnp.cos(theta/3) + shift                  # γ
+    lambda_min = sqrt_term * jnp.cos((theta + 2*jnp.pi)/3) + shift     # α
+    
+    lambda_max = jnp.where(atilde < 1e-6, 0.0, lambda_max)
+    lambda_min = jnp.where(atilde < 1e-6, 0.0, lambda_min)
+
+    return lambda_min, lambda_max
 
 def compute_dt(si, sj, nx, ny, dx):
     hi, hui, hvi, zi, gi = si
@@ -138,11 +185,12 @@ def compute_dt(si, sj, nx, ny, dx):
     sqrt_i = jnp.sqrt(hi)
     sqrt_j = jnp.sqrt(hj)
 
-    ui = jnp.where(hi > 0.0, hui/hi, 0.0)
-    vi = jnp.where(hi > 0.0, hvi/hi, 0.0)
+    ui = jnp.where(hi > DRY_TOL, hui/hi, 0.0)
+    vi = jnp.where(hi > DRY_TOL, hvi/hi, 0.0)
 
-    uj = jnp.where(hj > 0.0, huj/hj, 0.0)
-    vj = jnp.where(hj > 0.0, hvj/hj, 0.0)
+
+    uj = jnp.where(hj > DRY_TOL, huj/hj, 0.0)
+    vj = jnp.where(hj > DRY_TOL, hvj/hj, 0.0)
 
     uhati = ui*nx + vi*ny          # normal 
     vhati = -ui*ny + vi*nx         # tangent
@@ -163,8 +211,10 @@ def compute_dt(si, sj, nx, ny, dx):
     lambda_1 = utilde - ctilde
     lambda_3 = utilde + ctilde
 
-    lambda_approx_1 = _get_approx_lambda(lambda_1, atilde, utilde, ctilde)
-    lambda_approx_4 = _get_approx_lambda(lambda_3, atilde, utilde, ctilde)
+    #lambda_approx_1 = _get_approx_lambda(lambda_1, atilde, utilde, ctilde)
+    #lambda_approx_4 = _get_approx_lambda(lambda_3, atilde, utilde, ctilde)
+
+    lambda_approx_1, lambda_approx_4 = _get_lambda(utilde, atilde, ctilde)
 
     # Detect degenerate Roe state
     roe_exner_speed = jnp.maximum(jnp.abs(lambda_approx_1), jnp.abs(lambda_approx_4))
@@ -216,8 +266,8 @@ def compute_dt_2D(state: RoeExnerState, dx, mask):
     nodata_mask_x = mask[0, :, :-1] | mask[0, :, 1:]
     nodata_mask_y = mask[0, :-1, :] | mask[0, 1:, :]
 
-    depth_mask_x = (s1_x[0] >= DRY_TOL) | (s2_x[0] >= DRY_TOL)
-    depth_mask_y = (s1_y[0] >= DRY_TOL) | (s2_y[0] >= DRY_TOL)
+    depth_mask_x = (s1_x[0] > DRY_TOL) | (s2_x[0] > DRY_TOL)
+    depth_mask_y = (s1_y[0] > DRY_TOL) | (s2_y[0] > DRY_TOL)
 
     active_x = depth_mask_x & ~nodata_mask_x 
     active_y = depth_mask_y & ~nodata_mask_y 
@@ -235,8 +285,8 @@ def compute_dt_2D(state: RoeExnerState, dx, mask):
 #@jax.jit
 @jax.jit
 def roe_solver(si, sj, nx: float, ny: float, dx: float):
-    hi, hui, hvi, zi, ni = si
-    hj, huj, hvj, zj, nj = sj
+    hi, hui, hvi, z_bi, zi, ni = si
+    hj, huj, hvj, z_bj, zj, nj = sj
 
     hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL)
     hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL)
@@ -245,11 +295,12 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     sqrt_j = jnp.sqrt(hj)
 
     # Calculate velocities, handling dry beds
-    ui = jnp.where(hi > 0.0, hui/hi, 0.0)
-    vi = jnp.where(hi > 0.0, hvi/hi, 0.0)
+    ui = jnp.where(hi > DRY_TOL, hui/hi, 0.0)
+    vi = jnp.where(hi > DRY_TOL, hvi/hi, 0.0)
 
-    uj = jnp.where(hj > 0.0, huj/hj, 0.0)
-    vj = jnp.where(hj > 0.0, hvj/hj, 0.0)
+    uj = jnp.where(hj > DRY_TOL, huj/hj, 0.0)
+    vj = jnp.where(hj > DRY_TOL, hvj/hj, 0.0)
+
 
     # --- Rotate problem to (normal, tangential) coordinate frame ---
     
@@ -264,37 +315,35 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     # The (sqrt_i + sqrt_j) in the denominator could be zero if both are dry.
     # Add an epsilon to the denominator or use a more robust average for dry states.
     
-    htilde = jnp.where(0.5*(hi + hj) > DRY_TOL, 0.5*(hi+hj), 0.0)
+    htilde = 0.5*(hi + hj)
     ctilde = jnp.sqrt(g*htilde)
 
     utilde = (uhati * sqrt_i + uhatj * sqrt_j) / (sqrt_i + sqrt_j)
     vtilde = (vhati * sqrt_i + vhatj * sqrt_j) / (sqrt_i + sqrt_j) 
 
     # --- Calculate Wave Speeds (Eigenvalues) ---
-    lambda_1 = utilde - ctilde
+    lambda_1_roe = utilde - ctilde
     lambda_2 = utilde
-    lambda_3 = utilde + ctilde
+    lambda_3_roe = utilde + ctilde
 
     # Entropy correction Harten-Hyman
 
-    # lambda_1
     ei = uhati - jnp.sqrt(g*hi)
     ej = uhatj - jnp.sqrt(g*hj)
-
     mask_i = (ei < 0.0) & (ej > 0.0)
 
-    lambda_1 = jnp.where(mask_i, ei*(ej-lambda_1)/((ej-ei)+VEL_TOL), lambda_1) # Replace with Lambda hat
-    lambda_E1 = jnp.where(mask_i, lambda_1 - ei*(ej-lambda_1)/((ej-ei)+VEL_TOL), 0.0)
-    
+    lambda_E1 = jnp.where(mask_i, lambda_1_roe - ei*(ej-lambda_1_roe)/(ej-ei), 0.0)
+    lambda_1 = jnp.where(mask_i, ei*(ej-lambda_1_roe)/(ej-ei), lambda_1_roe)
+
     # lambda_3
     ei = uhati + jnp.sqrt(g*hi)
     ej = uhatj + jnp.sqrt(g*hj)
 
     mask_j = (ei < 0.0) & (ej > 0.0)
     
-    lambda_3 = jnp.where(mask_j, ej*(lambda_3-ei)/((ej-ei)+VEL_TOL), lambda_3)      # Replace with Lambda hat
-    lambda_E3 = jnp.where(mask_j, lambda_3 - ej*(lambda_3-ei)/((ej-ei)+VEL_TOL), 0.0)
-
+    lambda_E3 = jnp.where(mask_j, lambda_3_roe - ej*(lambda_3_roe-ei)/(ej-ei), 0.0)
+    lambda_3 = jnp.where(mask_j, ej*(lambda_3_roe-ei)/((ej-ei)+VEL_TOL), lambda_3_roe)
+    
     lambda_E2 = jnp.zeros_like(lambda_E3) 
     lambdas_E = jnp.stack([lambda_E1, lambda_E2, lambda_E3], axis=-1)
     # Entropy correction Harten-Hyman
@@ -308,7 +357,8 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     ], axis=-2)
 
     # Construct the elements of the inner matrix (before factoring out 1/(2c))
-    denom = lambda_1-lambda_3 + VEL_TOL
+    denom = lambda_1 - lambda_3
+    denom = jnp.where(jnp.abs(denom) < VEL_TOL, jnp.sign(denom) * VEL_TOL, denom)
     
     P_inv = jnp.stack([
         jnp.stack([-lambda_3/denom,      jnp.ones_like(utilde)/denom,     jnp.zeros_like(utilde)], axis=-1),
@@ -333,9 +383,14 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     # --- Source Terms ---
     # Based on "http://dx.doi.org/10.1016/j.jcp.2010.02.016" 
     
-    dz = zj - zi
-    di = hi + zi
-    dj = hj + zj
+    # handle sediment bed 
+
+    z_bi = jnp.where(z_bi > SED_TOL, z_bi, SED_TOL)
+    z_bj = jnp.where(z_bj > SED_TOL, z_bj, SED_TOL)
+
+    dz = (zj+z_bj) - (zi+z_bi)
+    di = hi + (zi+z_bi)
+    dj = hj + (zj+z_bj)
     dd = dj - di # Difference in total water depth
 
     # Topographic source term (pressure gradient due to bed slope)
@@ -343,9 +398,11 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     thrust_a = -g * htilde * dz
 
     # Alternative thrust calculation for specific dry/wet conditions
-    mask1_dz = (dz >= 0) & (di < zj)
-    mask2_dz = (dz < 0) & (dj < zi)
+    mask1_dz = (dz >= 0) & (di < zj+z_bj)
+    mask2_dz = (dz < 0) & (dj < zi+z_bi)
+    
     dztilde = jnp.where(mask1_dz, hi, jnp.where(mask2_dz, hj, dz))
+    
     hr = jnp.where(dz >= 0, hi, hj) # Choose upstream or downstream h for reference height
     thrust_b = -g * (hr - 0.5 * jnp.abs(dztilde)) * dztilde
 
@@ -355,6 +412,9 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     # over a hump or depression, and (utilde*dz > 0.0) when flow is moving uphill.
     mask_thrust = (dz * dd >= 0.0) & (utilde * dz > 0.0)
     thrust = jnp.where(mask_thrust, jnp.maximum(thrust_a, thrust_b), thrust_b)
+    
+    both_dry = (hi < DRY_TOL) & (hj < DRY_TOL)
+    thrust = jnp.where(both_dry, 0.0, thrust)
 
     ntilde = 0.5*(ni+nj)
     sf = (ntilde**2*jnp.sqrt(utilde**2+vtilde**2)*utilde)/(jnp.maximum(DRY_TOL, htilde**(4/3)))
@@ -368,9 +428,11 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
 
     betas = jnp.einsum("...ji,...i->...j", P_inv, Tn)
     
-    h_i1star = hi + alphas[...,0] - (betas[...,0]/lambdas[...,0])      # 1st intermediate state
-    h_j3star = hj - alphas[...,2] + (betas[...,2]/lambdas[...,2])     # 3rd intermediate state
-    
+    h_i1star = hi + alphas[...,0] - jnp.where(jnp.abs(lambdas[...,0]) > VEL_TOL, 
+                                            betas[...,0]/lambdas[...,0], 0.0)
+    h_j3star = hj - alphas[...,2] + jnp.where(jnp.abs(lambdas[...,2]) > VEL_TOL,
+                                            betas[...,2]/lambdas[...,2], 0.0)
+
     # Exner formulation requires unmodified source terms to extend up to interaction factors G=0.01
     
     upwP = jnp.zeros_like(lambdas)
@@ -433,12 +495,13 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
 
 def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
 
-    h, hu, hv, z, n = state.h, state.hu, state.hv, state.z, state.n
+    h, hu, hv, z_b, z, n = state.h, state.hu, state.hv, state.z_b, state.z, state.n_b
 
     s1_x = (
         h[:,:-1],
         hu[:,:-1],
         hv[:,:-1],
+        z_b[:,:-1],
         z[:,:-1],
         n[:,:-1]
     )
@@ -447,6 +510,7 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
         h[:, 1:],
         hu[:, 1:],
         hv[:, 1:],
+        z_b[:, 1:],
         z[:, 1:],
         n[:, 1:]
     )
@@ -455,6 +519,7 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
         h[:-1,:],
         hu[:-1,:],
         hv[:-1,:],
+        z_b[:-1,:],
         z[:-1,:],
         n[:-1,:]
     )
@@ -463,6 +528,7 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
         h[1:, :],
         hu[1:, :],
         hv[1:, :],
+        z_b[1:, :],
         z[1:, :],
         n[1:, :]
     )
@@ -474,9 +540,9 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
 
     nodata_mask_x = mask[0, :, :-1] | mask[0, :, 1:]
     nodata_mask_y = mask[0, :-1, :] | mask[0, 1:, :]
-
-    depth_mask_x = (s1_x[0] >= DRY_TOL) | (s2_x[0] >= DRY_TOL)
-    depth_mask_y = (s1_y[0] >= DRY_TOL) | (s2_y[0] >= DRY_TOL)
+    
+    depth_mask_x = (s1_x[0] > DRY_TOL) | (s2_x[0] > DRY_TOL)
+    depth_mask_y = (s1_y[0] > DRY_TOL) | (s2_y[0] > DRY_TOL)
 
     active_x = depth_mask_x & ~nodata_mask_x
     active_y = depth_mask_y & ~nodata_mask_y
@@ -499,7 +565,7 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
     dhu = fluxes[..., 1]
     dhv = fluxes[..., 2]
 
-    h_new  = state.h - dt * dh  / dx
+    h_new  = state.h - dt * dh / dx
     hu_new = state.hu - dt * dhu / dx
     hv_new = state.hv - dt * dhv / dx
 
@@ -510,23 +576,26 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
     )
    
 #@jax.jit
-def exner_solver(si, sj,  nx, ny, dx):
+def exner_solver(si, sj, nx, ny, dx):
     # We will be implementing the Approximately Coupled Solver (ACM) https://doi.org/10.1016/j.advwatres.2021.103931
-    hi, hui, hvi, zi, gi = si
-    hj, huj, hvj, zj, gj = sj
+    hi, hui, hvi, z_bi, zi, gi = si
+    hj, huj, hvj, z_bj, zj, gj = sj
 
     hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL)
     hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL)
 
+    z_bi = jnp.where(z_bi > SED_TOL, z_bi, SED_TOL)
+    z_bj = jnp.where(z_bj > SED_TOL, z_bj, SED_TOL)
+    
     sqrt_i = jnp.sqrt(hi)
     sqrt_j = jnp.sqrt(hj)
 
     # Calculate velocities, handling dry beds
-    ui = jnp.where(hi >= DRY_TOL, hui/hi, 0.0)
-    vi = jnp.where(hi >= DRY_TOL, hvi/hi, 0.0)
+    ui = jnp.where(hi > DRY_TOL, hui/hi, 0.0)
+    vi = jnp.where(hi > DRY_TOL, hvi/hi, 0.0)
 
-    uj = jnp.where(hj >= DRY_TOL, huj/hj, 0.0)
-    vj = jnp.where(hj >= DRY_TOL, hvj/hj, 0.0)
+    uj = jnp.where(hj > DRY_TOL, huj/hj, 0.0)
+    vj = jnp.where(hj > DRY_TOL, hvj/hj, 0.0)
 
     # --- Rotate problem to (normal, tangential) coordinate frame ---
     uhati = ui * nx + vi * ny   # Normal velocity component
@@ -541,11 +610,11 @@ def exner_solver(si, sj,  nx, ny, dx):
     qb_nhatj = gj*umagj*uhatj
 
     gtilde = 0.5*(gi+gj)
-    dz = zj - zi + 1e-14
+    dz = (z_bj+zj) - (z_bi+zi) 
 
     dqbhat = gtilde*umagj*uhatj - gtilde*umagi*uhati
 
-    lambda_4 = jnp.where(jnp.abs(dz) > 1e-4, dqbhat / dz, utilde)
+    lambda_4 = jnp.where(jnp.abs(dz) > SED_TOL, dqbhat / dz, jnp.sign(dz)*jnp.abs(utilde))
 
     corrector_i = (gtilde - gi)*umagi*uhati
     corrector_j = (gtilde - gj)*umagj*uhatj
@@ -559,67 +628,68 @@ def exner_solver(si, sj,  nx, ny, dx):
 
 #@jax.jit
 def exner_solve_2D(state, dt, dx, mask):
-    h, hu, hv, z, G = state.h, state.hu, state.hv, state.z, state.G
+    h, hu, hv, z_b, z, G = state.h, state.hu, state.hv, state.z_b, state.z, state.G
 
-    s1_x = (
-        h[:,:-1],
-        hu[:,:-1],
-        hv[:,:-1],
-        z[:,:-1],
-        G[:,:-1]
-    )
+    # 1. Define Slices for Interfaces (Same as Roe Solver)
+    s1_x = (h[:,:-1], hu[:,:-1], hv[:,:-1], z_b[:,:-1], z[:,:-1], G[:,:-1])
+    s2_x = (h[:, 1:], hu[:, 1:], hv[:, 1:], z_b[:, 1:], z[:, 1:], G[:, 1:])
 
-    s2_x = (
-        h[:, 1:],
-        hu[:, 1:],
-        hv[:, 1:],
-        z[:, 1:],
-        G[:, 1:]
-    )
+    s1_y = (h[:-1,:], hu[:-1,:], hv[:-1,:], z_b[:-1,:], z[:-1,:], G[:-1,:])
+    s2_y = (h[1:, :], hu[1:, :], hv[1:, :], z_b[1:, :], z[1:, :], G[1:, :])
 
-    s1_y = (
-        h[:-1,:],
-        hu[:-1,:],
-        hv[:-1,:],
-        z[:-1,:],
-        G[:-1,:]
-    )
+    # 2. Compute Potential Fluxes
+    F_x = exner_solver(s1_x, s2_x, 1, 0, dx)
+    F_y = exner_solver(s1_y, s2_y, 0, -1, dx)
 
-    s2_y = (
-        h[1:, :],
-        hu[1:, :],
-        hv[1:, :],
-        z[1:, :],
-        G[1:, :]
-    )
+    # 3. INTERFACE CORRECTIONS
+    # We must stop sediment flux if:
+    # a) One side is a wall (mask)
+    # b) The water surface (eta) is lower than the neighboring bed (obstruction)
+    # c) The cell is effectively dry
+    
+    # Calculate Water Surface (eta = h + z)
+    eta1_x = s1_x[0] + s1_x[3] + s1_x[4]; eta2_x = s2_x[0] + s2_x[3] + s2_x[4]
+    eta1_y = s1_y[0] + s1_y[3] + s1_y[4]; eta2_y = s2_y[0] + s2_y[3] + s2_y[4]
 
+    # Masking/Wall logic per interface
     nodata_mask_x = mask[0, :, :-1] | mask[0, :, 1:]
     nodata_mask_y = mask[0, :-1, :] | mask[0, 1:, :]
 
-    depth_mask_x = (s1_x[0] >= DRY_TOL) | (s2_x[0] >= DRY_TOL)
-    depth_mask_y = (s1_y[0] >= DRY_TOL) | (s2_y[0] >= DRY_TOL)
+    bound_mask_x = mask[1, :, :-1] | mask[1, :, 1:]
+    bound_mask_y = mask[1, :-1, :] | mask[1, 1:, :]
 
-    active_x = depth_mask_x & ~nodata_mask_x
-    active_y = depth_mask_y & ~nodata_mask_y
+    # Obstruction logic (Don't allow sediment to climb a dry wall higher than the water)
+    # This prevents the "leaking" effect at the edges of the domain
+    
+    stop_x = ((eta1_x < s2_x[3]+s2_x[4]) & (s2_x[0] < DRY_TOL)) | \
+             ((eta2_x < s1_x[3]+s1_x[4]) & (s1_x[0] < DRY_TOL)) | \
+             nodata_mask_x | \
+             (s1_x[3] < SED_TOL) | (s2_x[3] < SED_TOL)
 
+    stop_y = ((eta1_y < s2_y[3]+s2_y[4]) & (s2_y[0] < DRY_TOL)) | \
+             ((eta2_y < s1_y[3]+s1_y[4]) & (s1_y[0] < DRY_TOL)) | \
+             nodata_mask_y | \
+             (s1_y[3] < SED_TOL) | (s2_y[3] < SED_TOL) 
+
+    # Dry bed logic: If both cells are dry, sediment flux is zero
+    active_x = (s1_x[0] > DRY_TOL) | (s2_x[0] > DRY_TOL)
+    active_y = (s1_y[0] > DRY_TOL) | (s2_y[0] > DRY_TOL)
+
+    # Apply corrections
+    F_x = jnp.where(active_x & ~stop_x, F_x, 0.0)
+    F_y = jnp.where(active_y & ~stop_y, F_y, 0.0)
+
+    # 4. Final Flux Divergence and Bed Update
     fluxes = jnp.zeros((state.h.shape[0], state.h.shape[1]))
 
-    # Calculate the upwinded fluxes at the x-interfaces
-    F_x = exner_solver(s1_x, s2_x, 1, 0, dx)
-    F_y = exner_solver(s1_y, s2_y, 0, -1, dx)
-    F_x = jnp.where(active_x, F_x, 0.0)
-    F_y = jnp.where(active_y, F_y, 0.0)
-    
     fluxes = fluxes.at[:, 1:].add(-F_x)
     fluxes = fluxes.at[:,:-1].add(F_x)
     fluxes = fluxes.at[1:, :].add(-F_y)
     fluxes = fluxes.at[:-1,:].add(F_y)
 
-    z_new = state.z - dt * fluxes / dx
+    z_new = jnp.maximum(state.z_b - dt * fluxes / dx, 0.0)
 
-    return state.replace(
-        z = z_new 
-    )
+    return state.replace(z_b = z_new)
 
 def make_halo_exchange(mpi_handler):
     neighbors = mpi_handler.neighbors

@@ -25,7 +25,7 @@ class RoeExner_ReflectiveBoundary:
 
         # Copy scalar fields
         h_int = state.h[iy, ix]
-        z_int = state.z[iy, ix]
+        z_b_int = state.z_b[iy, ix]
         n_int = state.n[iy, ix]
         G_int = state.G[iy, ix]
 
@@ -48,15 +48,15 @@ class RoeExner_ReflectiveBoundary:
         h_new = state.h.at[by, bx].set(h_int)
         hu_new = state.hu.at[by, bx].set(hu_ref)
         hv_new = state.hv.at[by, bx].set(hv_ref)
-        z_new = state.z.at[by, bx]. set(z_int)
+        z_b_new = state.z_b.at[by, bx].set(z_b_int)
         n_new = state.n.at[by, bx].set(n_int)
         G_new = state.G.at[by, bx].set(G_int)
 
-        return RoeExnerState(
+        return state.replace(
             h=h_new, 
             hu=hu_new, 
             hv=hv_new, 
-            z=z_new, 
+            z_b=z_b_new, 
             n=n_new,
             G=G_new,
             seds=state.seds

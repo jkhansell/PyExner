@@ -9,7 +9,9 @@ from PyExner.state.base import BaseState
 @dataclass
 class RoeExnerState(BaseState):
     z: jax.Array
+    z_b: jax.Array
     n: jax.Array
+    n_b: jax.Array
     G: jax.Array
     seds: jax.Array
 
@@ -24,7 +26,9 @@ class RoeExnerState(BaseState):
             hu=zeros,
             hv=zeros,
             z=ones,    # Flat bed default
+            z_b=zeros,    # Flat bed default
             n=zeros,
+            n_b=zeros,
             G=zeros,
             seds=jnp.zeros((1,1), dtype=dtype)
         )
@@ -33,7 +37,7 @@ class RoeExnerState(BaseState):
         return dc_replace(self, **kwargs)
 
 def RoeExner_state_flatten(state: RoeExnerState):
-    children = (state.h, state.hu, state.hv, state.z, state.n, state.G, state.seds)
+    children = (state.h, state.hu, state.hv, state.z, state.z_b, state.n, state.n_b, state.G, state.seds)
     return children, None
 
 def RoeExner_state_unflatten(aux, children):

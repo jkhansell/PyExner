@@ -8,38 +8,35 @@ from PyExner. state. roe_exner_state import RoeExnerState
 
 @register_boundary("Roe Exner Transmissive")
 @dataclass
-class RoeExner_TransmissiveBoundary: 
-    mask: jax.Array                            # shape (Ny, Nx), boolean
-    normal: jax.Array                          # shape (2,), [nx, ny]
-    interior_indices: Tuple[jax.Array, jax.Array]  # (y_interior, x_interior)
-    boundary_indices: Tuple[jax.Array, jax.Array]  # (y_boundary, x_boundary)
+class RoeExner_TransmissiveBoundary:
+    mask: jax.Array
+    normal: jax.Array                 # [nx, ny]
+    interior_indices: Tuple[jax.Array, jax.Array]
+    boundary_indices: Tuple[jax.Array, jax.Array]
 
     def apply(self, state: RoeExnerState, time: float) -> RoeExnerState:
-        """
-        Applies transmissive boundary conditions: 
-        - All fields (`h`, `hu`, `hv`, `z`, `n`, `G`) are copied from interior cells. 
-        - This allows free outflow with no reflection. 
-        """
         by, bx = self.boundary_indices
         iy, ix = self.interior_indices
+        nx, ny = self.normal
 
-        # Copy ALL scalar and vector fields from interior
-        h_new = state.h.at[by, bx].set(state.h[iy, ix])
-        hu_new = state.hu.at[by, bx].set(state.hu[iy, ix])  # FIXED: was state.h
-        hv_new = state. hv.at[by, bx].set(state.hv[iy, ix])  # FIXED: was state.h
-        z_new = state.z.at[by, bx]. set(state.z[iy, ix])
-        n_new = state.n.at[by, bx].set(state.n[iy, ix])
-        G_new = state.G.at[by, bx]. set(state.G[iy, ix])
+        h  = state.h[iy, ix]
+        hu = state.hu[iy, ix]
+        hv = state.hv[iy, ix]
+        z_b  = state.z_b[iy, ix]
+        n  = state.n[iy, ix]
+        G  = state.G[iy, ix]
 
-        return RoeExnerState(
-            h=h_new, 
-            hu=hu_new, 
-            hv=hv_new, 
-            z=z_new, 
-            n=n_new,
-            G=G_new,
-            seds=state.seds
+        # normal / tangential velocity
+        
+        return state.replace(
+            h  = state.h.at[by, bx].set(h),
+            hu = state.hu.at[by, bx].set(hu),
+            hv = state.hv.at[by, bx].set(hv),
+            z_b  = state.z_b.at[by, bx].set(z_b),
+            n  = state.n.at[by, bx].set(n),
+            G  = state.G.at[by, bx].set(G),
         )
+
 
 def RoeExner_TransmissiveBoundary_flatten(b: RoeExner_TransmissiveBoundary):
     children = (b.mask, b.normal, b.interior_indices, b.boundary_indices)
