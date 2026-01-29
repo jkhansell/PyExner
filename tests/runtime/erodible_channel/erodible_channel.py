@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 def erodible_channel():
     Lx = 27.59
     Ly = 9.2
-    dh = 0.005
+    dh = 0.01
 
     x_range = [0, Lx]
     y_range = [0, Ly]
@@ -64,32 +64,38 @@ def erodible_channel():
     maskh = (X <= x_1+x_2) 
     mask5 = (X <= 1.76)
     maskzb1 = (X >= x_1 + x_2 - 1.5) & (X <= x_1 + x_2 + 9.0)
-    maskzb2 = (X >= x_1 + x_2 - 1.5) & (X <= x_1 + x_2 - 1.5 + 1.5/5)
+    maskzb2 = (X >= x_1 + x_2 - 1.5) & (X <= x_1 + x_2 - 1.5 + 1.5/4)
     # ramp up from 0 o 0.085 on maskzb2
-
 
     z = np.where(mask5, 0.0, 0.1)
 
     # ramp interval
     x0 = x_1 + x_2 - 1.5
-    x1 = x_1 + x_2 - 1.5 + 1.5/5   # ramp length
+    x1 = x_1 + x_2 - 1.5 + 1.5/4   # ramp length
 
     # normalized coordinate in [0,1]
     s = (X - x0) / (x1 - x0)
     s = np.clip(s, 0.0, 1.0)
 
-    z_b = np.where(maskzb1, 0.085, 0.0)
-    z_b = np.where(maskzb2, 0.085 * s, z_b)
+    # right ramp interval
+    xR1 = x_1 + x_2 + 9.0        # end of structure
+    xR0 = xR1 - 1.5/6            # start of ramp down
+    maskzb3 = (X >= xR0) & (X <= xR1)
+    # normalized coordinate for ramp down: 1 → 0
+    sr = (xR1 - X) / (xR1 - xR0)
+    sr = np.clip(sr, 0.0, 1.0)
+
+    z_b = np.where(maskzb1, 0.085, 0.0)        # plateau
+    z_b = np.where(maskzb2, 0.085 * s, z_b)    # ramp up
+    z_b = np.where(maskzb3, 0.085 * sr, z_b)   # ramp down
 
     h = np.where(maskh & ~nanmask, 0.57 - (z+z_b), 0.0)
-
 
     u = np.zeros_like(h)
     v = np.zeros_like(h)
 
     n_p = 0.0165
     n = n_p*np.ones_like(h)
-
 
     h[nanmask] = np.nan
     u[nanmask] = np.nan
@@ -131,7 +137,6 @@ def erodible_channel():
     plt.colorbar()
     plt.savefig("z.png")
     plt.close()
-
 
 if __name__ == "__main__":
     erodible_channel()

@@ -136,18 +136,18 @@ for i, idt in enumerate(time_array):
     ax_3 = fig.add_subplot(gs[2])
 
     # Water Level Plot
-    ax_1.plot(data.x, data.h[i, 80] + data.z_b[i, 80], c="black", marker='o', 
+    ax_1.plot(data.x, data.h[i, 80], c="black", marker='o', 
             markerfacecolor='none', markeredgecolor="black", markersize=2)
     ax_1.set_ylabel(r"Water level $h+z$ [m]")
     ax_1.set_xticklabels([]) # Remove labels to avoid overlap with middle plot
-    ax_1.set_ylim(0.0, 0.4)
+    #ax_1.set_ylim(0.0, 0.4)
 
     # Bed Height Plot
     ax_2.plot(data.x, data.z_b[i, 80], c="black", marker='o', 
             markerfacecolor='none', markeredgecolor="black", markersize=2)
     ax_2.set_ylabel(r"Bed height $z$ [m]")
     ax_2.set_xticklabels([]) # Remove labels
-    ax_2.set_ylim(0.08, 0.12)
+    #ax_2.set_ylim(0.06, 0.11)
 
     # Froude Number Plot
     ax_3.plot(data.x, froude, c="black", marker='o', 

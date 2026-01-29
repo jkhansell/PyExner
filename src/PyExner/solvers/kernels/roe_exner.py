@@ -170,8 +170,8 @@ def _get_lambda(utilde, atilde, ctilde):
     lambda_max = sqrt_term * jnp.cos(theta/3) + shift                  # γ
     lambda_min = sqrt_term * jnp.cos((theta + 2*jnp.pi)/3) + shift     # α
     
-    lambda_max = jnp.where(atilde < 1e-6, 0.0, lambda_max)
-    lambda_min = jnp.where(atilde < 1e-6, 0.0, lambda_min)
+    lambda_max = jnp.where(atilde < 1e-4, 0.0, lambda_max)
+    lambda_min = jnp.where(atilde < 1e-4, 0.0, lambda_min)
 
     return lambda_min, lambda_max
 
@@ -187,7 +187,6 @@ def compute_dt(si, sj, nx, ny, dx):
 
     ui = jnp.where(hi > DRY_TOL, hui/hi, 0.0)
     vi = jnp.where(hi > DRY_TOL, hvi/hi, 0.0)
-
 
     uj = jnp.where(hj > DRY_TOL, huj/hj, 0.0)
     vj = jnp.where(hj > DRY_TOL, hvj/hj, 0.0)
@@ -610,11 +609,11 @@ def exner_solver(si, sj, nx, ny, dx):
     qb_nhatj = gj*umagj*uhatj
 
     gtilde = 0.5*(gi+gj)
-    dz = (z_bj+zj) - (z_bi+zi) 
+    dz = z_bj - z_bi
 
     dqbhat = gtilde*umagj*uhatj - gtilde*umagi*uhati
 
-    lambda_4 = jnp.where(jnp.abs(dz) > SED_TOL, dqbhat / dz, jnp.sign(dz)*jnp.abs(utilde))
+    lambda_4 = jnp.where(jnp.abs(dz) > SED_TOL, dqbhat / dz, utilde)
 
     corrector_i = (gtilde - gi)*umagi*uhati
     corrector_j = (gtilde - gj)*umagj*uhatj
@@ -646,38 +645,24 @@ def exner_solve_2D(state, dt, dx, mask):
     # a) One side is a wall (mask)
     # b) The water surface (eta) is lower than the neighboring bed (obstruction)
     # c) The cell is effectively dry
-    
-    # Calculate Water Surface (eta = h + z)
-    eta1_x = s1_x[0] + s1_x[3] + s1_x[4]; eta2_x = s2_x[0] + s2_x[3] + s2_x[4]
-    eta1_y = s1_y[0] + s1_y[3] + s1_y[4]; eta2_y = s2_y[0] + s2_y[3] + s2_y[4]
 
     # Masking/Wall logic per interface
     nodata_mask_x = mask[0, :, :-1] | mask[0, :, 1:]
     nodata_mask_y = mask[0, :-1, :] | mask[0, 1:, :]
 
-    bound_mask_x = mask[1, :, :-1] | mask[1, :, 1:]
-    bound_mask_y = mask[1, :-1, :] | mask[1, 1:, :]
-
     # Obstruction logic (Don't allow sediment to climb a dry wall higher than the water)
     # This prevents the "leaking" effect at the edges of the domain
     
-    stop_x = ((eta1_x < s2_x[3]+s2_x[4]) & (s2_x[0] < DRY_TOL)) | \
-             ((eta2_x < s1_x[3]+s1_x[4]) & (s1_x[0] < DRY_TOL)) | \
-             nodata_mask_x | \
-             (s1_x[3] < SED_TOL) | (s2_x[3] < SED_TOL)
-
-    stop_y = ((eta1_y < s2_y[3]+s2_y[4]) & (s2_y[0] < DRY_TOL)) | \
-             ((eta2_y < s1_y[3]+s1_y[4]) & (s1_y[0] < DRY_TOL)) | \
-             nodata_mask_y | \
-             (s1_y[3] < SED_TOL) | (s2_y[3] < SED_TOL) 
+    stop_x = nodata_mask_x | ((s1_x[3] < SED_TOL) & (s2_x[3] < SED_TOL))
+    stop_y = nodata_mask_y | ((s1_y[3] < SED_TOL) & (s2_y[3] < SED_TOL)) 
 
     # Dry bed logic: If both cells are dry, sediment flux is zero
-    active_x = (s1_x[0] > DRY_TOL) | (s2_x[0] > DRY_TOL)
-    active_y = (s1_y[0] > DRY_TOL) | (s2_y[0] > DRY_TOL)
+    active_x = (s1_x[0] > DRY_TOL) | (s2_x[0] > DRY_TOL) | ~stop_x 
+    active_y = (s1_y[0] > DRY_TOL) | (s2_y[0] > DRY_TOL) | ~stop_y
 
     # Apply corrections
-    F_x = jnp.where(active_x & ~stop_x, F_x, 0.0)
-    F_y = jnp.where(active_y & ~stop_y, F_y, 0.0)
+    F_x = jnp.where(active_x, F_x, 0.0)
+    F_y = jnp.where(active_y, F_y, 0.0)
 
     # 4. Final Flux Divergence and Bed Update
     fluxes = jnp.zeros((state.h.shape[0], state.h.shape[1]))
@@ -687,7 +672,7 @@ def exner_solve_2D(state, dt, dx, mask):
     fluxes = fluxes.at[1:, :].add(-F_y)
     fluxes = fluxes.at[:-1,:].add(F_y)
 
-    z_new = jnp.maximum(state.z_b - dt * fluxes / dx, 0.0)
+    z_new = state.z_b - dt * fluxes / dx
 
     return state.replace(z_b = z_new)
 
