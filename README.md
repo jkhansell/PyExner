@@ -9,6 +9,8 @@ Accelerated Hydrodynamic and Morphological Simulations using JAX
 
 ## Overview
 
+![](tests/runtime/erodible_channel/fields_with_umag.gif)
+
 PyExner is a Python library for accelerated, parallelized hydrodynamic and morphological simulations, leveraging JAX for high-performance numerical computation. The library is designed to solve shallow water equations, sediment transport, and morphodynamic problems using modern hardware and scalable parallelism.
 
 ## Features
