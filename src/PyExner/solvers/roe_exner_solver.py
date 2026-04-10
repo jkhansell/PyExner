@@ -59,6 +59,7 @@ def init_fn_roeexner(state: RoeExnerState, mask, config: SolverConfig) -> RoeExn
     n = config.halo_exchange(state.n)
     z = config.halo_exchange(state.z)
     z_b = config.halo_exchange(state.z_b)
+    
     n_b = config.compute_n(state.n, z_b, state.seds)
     n_b = config.halo_exchange(n_b)
 

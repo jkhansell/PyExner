@@ -23,7 +23,7 @@ if __name__ == "__main__":
             h = dataset.h[i, N_half]
             print(dataset.h)
 
-            z = dataset.z[i, N_half]
+            z = dataset.z_b[i, N_half]
 
             fig = plt.figure(figsize=(10,6))
             fig.suptitle(f"Time: {idt} s")

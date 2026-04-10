@@ -209,4 +209,5 @@ __marimo__/
 *.err
 *.out
 *.nc
-tests/*.png
+tests/*/*/*.png
+

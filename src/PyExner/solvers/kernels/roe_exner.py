@@ -203,8 +203,8 @@ def compute_dt(si, sj, nx, ny, dx):
     hi, hui, hvi, zi, gi = si
     hj, huj, hvj, zj, gj = sj
     
-    hi = jnp.where(hi > DRY_TOL, hi, 0.0)
-    hj = jnp.where(hj > DRY_TOL, hj, 0.0)
+    hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL)
+    hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL)
     
     sqrt_i = jnp.sqrt(hi)
     sqrt_j = jnp.sqrt(hj)
