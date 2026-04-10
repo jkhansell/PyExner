@@ -15,7 +15,7 @@ PyExner is a Python-based numerical engine designed for accelerated, parallelize
 Its primary application is solving the coupled systems of shallow water equations and sediment transport (Exner equations) to model riverbed evolution, dam-breaks, and complex channel flows.
 
 <p align="center">
-  <img src="tests/runtime/erodible_channel/fields_with_umag.gif" width="80%" alt="Erodible Channel Simulation">
+  <img src="images/fields_with_umag.gif" width="80%" alt="Erodible Channel Simulation">
 </p>
 
 ## ✨ Key Features

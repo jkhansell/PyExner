@@ -17,7 +17,8 @@ def supercritical_dambreak_exner_2D(L, dh):
     u = np.zeros_like(h)
     v = np.zeros_like(h)
 
-    z = 10.0 * np.ones_like(h)
+    z = 1 * np.ones_like(h)
+    z_b = 10.0 * np.ones_like(h)
 
     n = np.zeros_like(h)
     G = (0.01 / (1.0 - 0.4)) * np.ones_like(h)
@@ -30,6 +31,7 @@ def supercritical_dambreak_exner_2D(L, dh):
             "z": (["y", "x"], z),
             "G": (["y", "x"], G),
             "n": (["y", "x"], n),
+            "z_b": (["y", "x"], z_b),
         },
         coords={"x": x, "y": y},
         attrs={
@@ -58,6 +60,7 @@ def subcritical_dambreak_exner_2D(L, dh):
     v = np.zeros_like(h)
 
     z = 1.0 * np.ones_like(h)
+    z_b = 1.0 * np.ones_like(h)
 
     n = np.zeros_like(h)
     G = (0.01 / (1.0 - 0.4)) * np.ones_like(h)
@@ -70,6 +73,7 @@ def subcritical_dambreak_exner_2D(L, dh):
             "z": (["y", "x"], z),
             "G": (["y", "x"], G),
             "n": (["y", "x"], n),
+            "z_b": (["y", "x"], z_b),
         },
         coords={"x": x, "y": y},
         attrs={
