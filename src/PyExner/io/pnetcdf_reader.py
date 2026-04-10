@@ -128,7 +128,8 @@ class PnetCDFStateIO():
                     continue    
 
                 if name == "seds":
-                    if type(config["erosion"]["grass_factor"]) is str:
+                    grass = config["erosion"]["grass_factor"]
+                    if isinstance(grass, str) and grass != "constant":
                         if config["erosion"]["grass_factor"] == "MPM":
                             theta_c = 0.047
                         else: 

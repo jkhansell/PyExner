@@ -69,6 +69,16 @@ def compute_n(n, z_b, seds):
 
     return jnp.where(z_b > SED_TOL, np, n)
 
+def compute_n_factory(is_constant: bool):
+    if is_constant:
+        def _compute_n(n, z_b, seds):
+            return n  # Bypass sediment property calculation
+        return _compute_n
+    else:
+        def _compute_n(n, z_b, seds):
+            return compute_n(n, z_b, seds)
+        return _compute_n
+
 def compute_G(h, hu, hv, seds, mask):
 
     h = jnp.maximum(h, DRY_TOL)
@@ -115,7 +125,21 @@ def compute_G(h, hu, hv, seds, mask):
 
     return G
 
-def _get_theta(_lambda, utilde, ctilde):
+def compute_G_factory(is_constant: bool):
+    """Returns a compute_G function that either passes through state.G
+    (constant grass factor read from file) or fully computes it from seds (MPM)."""
+    if is_constant:
+        def _compute_G(h, hu, hv, seds, mask, state_G):
+            G = jnp.where(mask[0], 0.0, state_G)
+            G = jnp.where(h > DRY_TOL, G, 0.0)
+            return G
+        return _compute_G
+    else:
+        def _compute_G(h, hu, hv, seds, mask, state_G):
+            return compute_G(h, hu, hv, seds, mask)
+        return _compute_G
+
+
     return 3*_lambda**2 - 4*utilde*_lambda + utilde**2 - ctilde**2
 
 def _get_approx_lambda(_lambda, atilde, utilde, ctilde):

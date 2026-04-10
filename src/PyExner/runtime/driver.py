@@ -52,7 +52,7 @@ def run_driver(config_path: str):
     boundaries = BoundaryManager(params, mesh.local_X, mesh.local_Y)
 
     solver = create_solver_bundle(flux_scheme)
-    solver_config = solver.config(state, mpi_handler, boundaries, mesh.dh)
+    solver_config = solver.config(state, mpi_handler, boundaries, mesh.dh, params)
 
     integrator = create_integrator_bundle(time_scheme)
     integrator_config = integrator.config(cfl, end_time, out_freq, solver, solver_config)
