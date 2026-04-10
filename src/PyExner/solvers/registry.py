@@ -12,6 +12,8 @@ class SolverConfig(NamedTuple):
     boundaries: BoundaryManager
     dx: float
     halo_exchange: Callable[[jax.Array], jax.Array]
+    compute_G: Callable = None
+    compute_n: Callable = None
 
 class SolverBundle(NamedTuple):
     name: str

@@ -13,7 +13,7 @@ from PyExner.state.roe_exner_state import RoeExnerState
 from PyExner.solvers.kernels.roe_exner import (
     compute_dt_2D, roe_solve_2D, 
     exner_solve_2D, 
-    make_halo_exchange, compute_G, compute_n,
+    make_halo_exchange, compute_G_factory, compute_n_factory,
     momentum_corrections
 )
 from PyExner.solvers.registry import SolverConfig, SolverBundle, register_solver_bundle
@@ -35,14 +35,20 @@ def get_mask(state, dims, b_mask):
 
     return jnp.stack([mask, b_mask], axis=0)
 
-def config_fn_roeexner(state, mpi_handler, boundaries, dx):
+def config_fn_roeexner(state, mpi_handler, boundaries, dx, params):
     halo_exchange = make_halo_exchange(mpi_handler)
+    
+    is_constant = params["erosion"]["grass_factor"] == "constant"
+    compute_G = compute_G_factory(is_constant)
+    compute_n = compute_n_factory(is_constant)
 
     return SolverConfig(
         mpi_handler = mpi_handler,
         boundaries = boundaries,
         dx = dx, 
-        halo_exchange = halo_exchange
+        halo_exchange = halo_exchange,
+        compute_G = compute_G,
+        compute_n = compute_n
     )
 
 def init_fn_roeexner(state: RoeExnerState, mask, config: SolverConfig) -> RoeExnerState:
@@ -53,12 +59,12 @@ def init_fn_roeexner(state: RoeExnerState, mask, config: SolverConfig) -> RoeExn
     n = config.halo_exchange(state.n)
     z = config.halo_exchange(state.z)
     z_b = config.halo_exchange(state.z_b)
-    n_b = compute_n(state.n, z_b, state.seds)
+    n_b = config.compute_n(state.n, z_b, state.seds)
     n_b = config.halo_exchange(n_b)
 
     state = state.replace(h=h, hu=hu, hv=hv, z=z, z_b=z_b, n=n, n_b=n_b)
     
-    G = compute_G(state.h, state.hu, state.hv, state.seds, mask)
+    G = config.compute_G(state.h, state.hu, state.hv, state.seds, mask, state.G)
     G = config.halo_exchange(G)
 
     state = state.replace(G=G)
@@ -83,7 +89,7 @@ def step_fn_roeexner(state: RoeExnerState, time: float, dt: float, mask, config:
     state = state.replace(h=h, hu=hu, hv=hv)
 
     # Step 5: Compute morphodynamics source term
-    G = compute_G(state.h, state.hu, state.hv, state.seds, mask)    
+    G = config.compute_G(state.h, state.hu, state.hv, state.seds, mask, state.G)    
     G = config.halo_exchange(G) 
     state = state.replace(G=G)
 
@@ -94,7 +100,7 @@ def step_fn_roeexner(state: RoeExnerState, time: float, dt: float, mask, config:
     z_b = config.halo_exchange(state.z_b)
     state = state.replace(z_b=z_b)
 
-    n_b = compute_n(state.n, state.z_b, state.seds)
+    n_b = config.compute_n(state.n, state.z_b, state.seds)
     n_b = config.halo_exchange(n_b)
     state = state.replace(n_b=n_b)
 

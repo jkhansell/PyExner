@@ -16,7 +16,7 @@ def get_mask(state):
     mask = mask.at[1:-1, 1:-1].set(1)
     return mask
 
-def config_fn_roe(state, mpi_handler, boundaries, dx):
+def config_fn_roe(state, mpi_handler, boundaries, dx, params):
     halo_exchange = make_halo_exchange(mpi_handler)
 
     return SolverConfig(
