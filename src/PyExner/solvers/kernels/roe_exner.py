@@ -194,8 +194,8 @@ def _get_lambda(utilde, atilde, ctilde):
     lambda_max = sqrt_term * jnp.cos(theta/3) + shift                  # γ
     lambda_min = sqrt_term * jnp.cos((theta + 2*jnp.pi)/3) + shift     # α
     
-    lambda_max = jnp.where(atilde < 1e-4, 0.0, lambda_max)
-    lambda_min = jnp.where(atilde < 1e-4, 0.0, lambda_min)
+    lambda_max = jnp.where(atilde < 1e-5, 0.0, lambda_max)
+    lambda_min = jnp.where(atilde < 1e-5, 0.0, lambda_min)
 
     return lambda_min, lambda_max
 
@@ -203,8 +203,8 @@ def compute_dt(si, sj, nx, ny, dx):
     hi, hui, hvi, zi, gi = si
     hj, huj, hvj, zj, gj = sj
     
-    hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL)
-    hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL)
+    hi = jnp.where(hi > DRY_TOL, hi, 0.0)
+    hj = jnp.where(hj > DRY_TOL, hj, 0.0)
     
     sqrt_i = jnp.sqrt(hi)
     sqrt_j = jnp.sqrt(hj)

@@ -51,4 +51,4 @@ boundaries:
     normal: [0.0, 1.0]
 
 erosion: 
-  grass_factor: constant
+  grass_factor: 0.01

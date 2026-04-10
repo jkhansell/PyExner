@@ -1,0 +1,123 @@
+end_time: 115
+out_freq: 0.5
+cfl: 0.5
+flux_scheme: Roe Exner
+integrator: Forward Euler
+parNx: 1
+parNy: 1
+input_file: 90_bend_channel_domain.nc
+output_file: 90_bend_channel_domain_out.nc
+
+erosion:
+  grass_factor: MPM
+  bulk_porosity: 0.44
+  sediments:
+    sed1: 
+      fraction: 1.0
+      diameter: 1.7e-3
+      density: 2650
+      deposition_flux: 0.01
+      erosion_flux: 0.04
+
+      
+boundaries:
+
+  left:
+    type: Reflective
+    polygon:
+      - [0.0000, 0.0000]
+      - [0.0050, 0.0000]
+      - [0.0050, 2.4400]
+      - [0.0000, 2.4400]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [-1.0, 0.0] 
+
+  right:
+    type: Reflective
+    polygon:
+      - [6.7200, 0.4450]
+      - [6.7250, 0.4450]
+      - [6.7250, 3.8200]
+      - [6.7200, 3.8200]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [1.0, 0.0]
+
+  down1:
+    type: Reflective
+    polygon:
+      - [0.0000, 0.0000]
+      - [2.3900, 0.0000]
+      - [2.3900, 0.0050]
+      - [0.0000, 0.0050]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [0.0, -1.0]
+
+  down2:
+    type: Reflective
+    polygon:
+      - [2.3850, 0.0000]
+      - [2.3900, 0.0000]
+      - [2.3900, 0.4450]
+      - [2.3850, 0.4450]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [1.0, 0.0]
+
+  down3:
+    type: Reflective
+    polygon:
+      - [2.3900, 0.4450]
+      - [6.7250, 0.4450]
+      - [6.7250, 0.4500]
+      - [2.3900, 0.4500]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [0.0, -1.0]
+
+  up1:
+    type: Reflective
+    polygon:
+      - [0.0000, 2.4350]
+      - [2.3900, 2.4350]
+      - [2.3900, 2.4400]
+      - [0.0000, 2.4400]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [0.0, 1.0]
+
+  up2:
+    type: Reflective
+    polygon:
+      - [2.3850, 0.9400]
+      - [2.3900, 0.9400]
+      - [2.3900, 2.4400]
+      - [2.3850, 2.4400]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [1.0, 0.0]
+
+  up3:
+    type: Reflective
+    polygon:
+      - [2.3900, 0.9350]
+      - [6.2300, 0.9350]
+      - [6.2300, 0.9400]
+      - [2.3900, 0.9400]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [0.0, 1.0]
+
+  up4:
+    type: Reflective
+    polygon:
+      - [6.2300, 0.9400]
+      - [6.2350, 0.9400]
+      - [6.2350, 3.8200]
+      - [6.2300, 3.8200]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [-1.0, 0.0]
+
+  top:
+    type: Transmissive
+    polygon:
+      - [6.2300, 3.8150]
+      - [6.7250, 3.8150]
+      - [6.7250, 3.8200]
+      - [6.2300, 3.8200]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [0.0, 1.0]

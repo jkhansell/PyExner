@@ -14,7 +14,7 @@ class RoeExnerState(BaseState):
     n_b: jax.Array
     G: jax.Array
     seds: jax.Array
-
+                        
     @classmethod
     def empty(cls, mesh: 'Mesh2D', dtype=jnp.float32) -> "RoeExnerState":
         shape = mesh.local_shape  # e.g., (nx, ny)

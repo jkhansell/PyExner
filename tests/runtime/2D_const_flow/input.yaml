@@ -7,19 +7,10 @@ integrator: Forward Euler
 parNx: 1
 parNy: 1
 input_file: analytical_case.nc
-output_file: analytical_case_out.nc
+output_file: analytical_case_out_1.nc
 
 erosion:
-  grass_factor: MPM
-  bulk_porosity: 0.39
-  sediments:
-    sed1: 
-      fraction: 1.0
-      diameter: 1.72e-3
-      density: 2630
-      deposition_flux: 0.01
-      erosion_flux: 0.04
-  
+  grass_factor: constant
 
 boundaries:
 
