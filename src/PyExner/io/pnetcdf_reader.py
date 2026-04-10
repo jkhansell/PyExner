@@ -118,7 +118,7 @@ class PnetCDFStateIO():
 
             if name not in self.infile.variables:
                 if name == "G":
-                    if type(config["erosion"]["grass_factor"]) is str:
+                    if isinstance(config["erosion"]["grass_factor"], str):
                         new_values[name] = jnp.zeros((local_Ny, local_Nx))
                     else:
                         new_values[name] = config["erosion"]["grass_factor"]*jnp.ones((local_Ny, local_Nx))
@@ -129,7 +129,7 @@ class PnetCDFStateIO():
 
                 if name == "seds":
                     grass = config["erosion"]["grass_factor"]
-                    if isinstance(grass, str) and grass != "constant":
+                    if isinstance(grass, str):
                         if config["erosion"]["grass_factor"] == "MPM":
                             theta_c = 0.047
                         else: 
@@ -151,7 +151,7 @@ class PnetCDFStateIO():
 
                         new_values[name] = jnp.array(sediments).T
                     else:
-                        new_values[name] = jnp.empty(1)
+                        new_values[name] = jnp.zeros((1,1))
                     
                     continue
 
