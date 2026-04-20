@@ -1,0 +1,5 @@
+run: 7
+h_val: 0.25
+z_val: 0.101
+diameter: 0.00169
+porosity: 0.39
