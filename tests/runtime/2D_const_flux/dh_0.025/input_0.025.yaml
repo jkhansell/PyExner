@@ -1,0 +1,89 @@
+boundaries:
+  bottom:
+    normal:
+    - 0.0
+    - 1.0
+    polygon:
+    - - 0
+      - 1
+    - - 7
+      - 1
+    - - 7
+      - 0.9
+    - - 0
+      - 0.9
+    type: Reflective
+    values:
+    - 0
+    - 0
+    - 0
+    - 0
+  inlet:
+    normal:
+    - -1.0
+    - 0.0
+    polygon:
+    - - 0
+      - 0
+    - - 0.1
+      - 0
+    - - 0.1
+      - 1
+    - - 0
+      - 1
+    type: ConstantFlux
+    values:
+    - 0
+    - 3
+    - 0
+    - 0
+  outlet:
+    normal:
+    - 1.0
+    - 0.0
+    polygon:
+    - - 6.9
+      - 0
+    - - 7
+      - 0
+    - - 7
+      - 1
+    - - 6.9
+      - 1
+    type: Transmissive
+    values:
+    - 0
+    - 0
+    - 0
+    - 0
+  top:
+    normal:
+    - 0.0
+    - -1.0
+    polygon:
+    - - 0
+      - 0
+    - - 7
+      - 0
+    - - 7
+      - 0.1
+    - - 0
+      - 0.1
+    type: Reflective
+    values:
+    - 0
+    - 0
+    - 0
+    - 0
+cfl: 0.5
+end_time: 6
+erosion:
+  grass_factor: 0.01
+flux_scheme: Roe Exner
+input_file: analytical_case_0.025.nc
+integrator: Forward Euler
+io_freq: 0.5
+out_freq: 0.5
+output_file: analytical_case_0.025_out.nc
+parNx: 1
+parNy: 1
