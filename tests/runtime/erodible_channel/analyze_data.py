@@ -75,7 +75,7 @@ def plot_line_profiles():
         # Plot a line for each specific timestep
         # Extract Z values along the entire Y axis for the fixed X index
         # shape will be (len(dataset.y))
-        profile = z.isel(y=iy).sel(x=slice(1.76 + 10.33 + 0.5, 1.76 + 10.33 + 0.5 + 8))
+        profile = z.isel(y=iy).sel(x=slice(1.76 + 10.33 + 1.0, 1.76 + 10.33 + 1.0 + 8))
 
         actual_time = time_array[-1]
         print(actual_time)
@@ -108,7 +108,7 @@ def plot_line_profiles():
             df = pd.read_csv(os.path.join("experimental_results", file), skipinitialspace=True).sort_values("x")
             ax.plot(df.iloc[:,0], df.iloc[:,1], label=f"{file[3:-4]}", c=colors[j % len(colors)], zorder=2)
 
-        ax.plot(profile.x - (1.76 + 10.33 + 0.5) + 0.5, profile.values, label=f"PyExner", zorder=3, color="blue")
+        ax.plot(profile.x - (1.76 + 10.33 + 1.0), profile.values, label=f"PyExner", zorder=3, color="blue")
 
         ax.set_title(f"Cross-section at {name} (y={lines[name]})", fontweight='bold')
         ax.grid(True, alpha=0.3)
@@ -133,7 +133,7 @@ def plot_time_series():
     for name, coords in points.items():
         px, py = coords
 
-        px_target = 1.76 + 10.33 + px  
+        px_target = 1.76 + 10.33 + 1.0 + px  
         py_target = 9.2/2 + py 
 
         # Find the index of the closest value
