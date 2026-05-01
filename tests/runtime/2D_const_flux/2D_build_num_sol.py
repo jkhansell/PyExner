@@ -4,49 +4,34 @@ import os
 import yaml
 import subprocess
 
-def analytical_solution_2D(Ll=0, Lr=7, dh=0.1, t=0, q=3, A_g=0.005, alpha=0.005, beta=0.005, gamma=1, p=3/2, g=9.81):
 
-    x = np.arange(Ll, Lr + dh, dh)
-    y = np.arange(0, 1 + dh, dh)
+def build_analytical_case(dh=0.1, output_name="analytical_case.nc"):
 
-    X, Y = np.meshgrid(x, y, indexing="xy")
+    # ideal case parameters https://doi.org/10.1016/j.advwatres.2021.103931
+    A = 0.005           
+    alpha = 0.005
+    beta = 0.005
+    gamma = 1
+    q0 = 1 
 
-    # velocidad cuadrada
-    ue2 = ((alpha * X + beta) / A_g)**(1/p)
-
-    # velocidad
-    u = np.sqrt(ue2)
-
-    # altura
-    h = q / u
-
-    # z_b0
-    zb0 = -(u**3 + 2*q*g) / (2*u*g) + gamma
-
-    # evolución en el tiempo
-    zb = -alpha * t + zb0
-
-    return h, u, zb, zb0, x, y
-
-
-def build_analytical_case(Ll=0, Lr=7, dh=0.1, output_name="analytical_case.nc"):
-    x_range = [Ll, Lr]
+    x_range = [0, 7]
     y_range = [0, 1]
 
     x = np.arange(x_range[0], x_range[1] + dh, dh)
-    y = np.arange(y_range[0], y_range[1] + dh, dh)
+    y = np.arange(y_range[1], y_range[0] - dh, -dh)
 
     X, Y = np.meshgrid(x, y, indexing="xy")
 
-    # Condiciones iniciales
-    h0, u0, _ , zb0, _ , _ = analytical_solution_2D(t=0, Ll=Ll, Lr=Lr, dh=dh)
+    u_func = lambda x: ((alpha*x + beta)/A)**(1/3)
 
-    h = h0
-    u = u0
+    q = q0*np.ones_like(X)
+    u = u_func(X)
     v = np.zeros_like(u)
-    z_b = zb0
-    z = np.ones_like(h)
+    h = q/u
+    g = 9.81
+    z_b = -(u**3 + 2*g*q)/(2*g*u) + gamma
     n = np.zeros_like(h)
+    z = np.zeros_like(h)
 
     ds = xr.Dataset(
         {
@@ -72,7 +57,7 @@ def build_analytical_case(Ll=0, Lr=7, dh=0.1, output_name="analytical_case.nc"):
 
 if __name__ == "__main__":
 
-    build_analytical_case(dh=0.00625, output_name='analytical_case.nc')
+    build_analytical_case(dh=0.05, output_name='analytical_case.nc')
 
     # # dh values
     # dh_values = [0.1, 0.05, 0.025, 0.0125, 0.00625]
