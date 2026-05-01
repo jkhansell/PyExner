@@ -22,17 +22,22 @@ class RoeExner_ConstantFluxBoundary:
         hu_target = self.values[1]  
         hv_target = self.values[2]
 
-        hu_new = jnp.where(
-            self.mask, 
-            jnp.where(jnp.isnan(hu_target), state.hu, hu_target), 
-            state.hu
-        )
+        # u_target = hu_target / state.h
+
+        hu_new = jnp.ones_like(state.hu) * hu_target # esto hace que no solo la frontera tenga q = 3 sino todo el domain
+        hv_new = jnp.where(self.mask, hv_target, state.hv)
+
+        # hu_new = jnp.where(
+        #     self.mask, 
+        #     jnp.where(jnp.isnan(hu_target), state.hu, hu_target), 
+        #     state.hu
+        # )
         
-        hv_new = jnp.where(
-            self.mask, 
-            jnp.where(jnp.isnan(hv_target), state.hv, hv_target), 
-            state.hv
-        )
+        # hv_new = jnp.where(
+        #     self.mask, 
+        #     jnp.where(jnp.isnan(hv_target), state.hv, hv_target), 
+        #     state.hv
+        # )
 
         return RoeExnerState(
             h=state.h,

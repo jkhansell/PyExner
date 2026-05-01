@@ -167,7 +167,7 @@ def fig_2D_comparison(data, t_sel, h_min, h_max, zb_min, zb_max, hu_min, hu_max,
     axes[0,1].set_xlabel("$x$ (m)")
     axes[0,1].set_ylabel("$z_b$ (m)")
     axes[0,1].set_title(f"Perfil 1D de $z_b$ ($t$ = {t_sel}, $y$ = {mid_y})")
-    axes[0,1].set_ylim(-3, 1)
+    # axes[0,1].set_ylim(-3, 1)
     axes[0,1].legend()
     axes[0,1].grid()
 
@@ -303,6 +303,7 @@ def norms():
 # # run
 times = np.linspace(0, 6, data.t.shape[0])
 
+# fixed scales
 h_min, h_max = np.inf, -np.inf
 zb_min, zb_max = np.inf, -np.inf
 hu_min, hu_max = np.inf, -np.inf
@@ -342,6 +343,7 @@ err_h_max  = max(err_h_max, 1e-12)
 err_zb_max = max(err_zb_max, 1e-12)
 err_hu_max = max(err_hu_max, 1e-12)
 
+# plots
 for i in times:
     fig_2D_comparison(data, t_sel=i, h_min=h_min, h_max=h_max,
         zb_min=zb_min, zb_max=zb_max,
@@ -359,8 +361,8 @@ for i in times:
 #         err_hu_max=err_hu_max)
 
 
-# make_gif("results/frames_analytical_vs_numerical", "comparison.gif", fps=1)
-# make_gif("results/frames_profiles", "profiles.gif")
+make_gif("results/frames_analytical_vs_numerical", "comparison.gif", fps=1)
+make_gif("results/frames_profiles", "profiles.gif")
 
 
-# norms()
+norms()
