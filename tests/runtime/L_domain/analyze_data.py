@@ -128,7 +128,7 @@ def process_and_plot():
     plt.close()
 
     # 5. Dambreak animations (80th slice)
-    g = 9.81
+    """g = 9.81
     for i in range(len(time_array)):
         h_slice = data_cut.h[i, 80]
         zb_slice = data_cut.z_b[i, 80]
@@ -161,7 +161,7 @@ def process_and_plot():
         
         plt.tight_layout()
         fig.savefig(f"dambreak_{i:03d}.png", dpi=150)
-        plt.close()
+        plt.close()"""
     
     print("Analysis completed. Plots saved.")
 
