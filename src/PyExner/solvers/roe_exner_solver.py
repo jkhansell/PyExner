@@ -76,11 +76,11 @@ def step_fn_roeexner(state: RoeExnerState, time: float, dt: float, mask, config:
     # Step 1: Solve hydrodynamics
     state = roe_solve_2D(state, dt, config.dx, mask)
 
-    # Step 3: Apply boundary conditions   
-    state = config.boundaries.apply(state, time)
-
     # Step 2: Momentum corrections
     state = momentum_corrections(state, mask)
+
+    # Step 3: Apply boundary conditions   
+    state = config.boundaries.apply(state, time)
 
     # Step 4: Now halo exchange (sends corrected values to neighbors)
     h = config.halo_exchange(state.h)

@@ -333,18 +333,38 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     uhatj = uj * nx + vj * ny
     vhatj = -uj * ny + vj * nx
 
-    # Roe averages
-    htilde = 0.5 * (hi + hj)
-    ctilde = jnp.sqrt(g * htilde)
-    ctilde = jnp.maximum(ctilde, 1e-8)
+    htilde = 0.5*(hi + hj)
+    ctilde = jnp.sqrt(g*htilde)
 
     utilde = (uhati * sqrt_i + uhatj * sqrt_j) / (sqrt_i + sqrt_j)
-    vtilde = (vhati * sqrt_i + vhatj * sqrt_j) / (sqrt_i + sqrt_j)
+    vtilde = (vhati * sqrt_i + vhatj * sqrt_j) / (sqrt_i + sqrt_j) 
 
-    # Eigenvalues
-    lambda_1 = utilde - ctilde
+    # --- Calculate Wave Speeds (Eigenvalues) ---
+    lambda_1_roe = utilde - ctilde
     lambda_2 = utilde
-    lambda_3 = utilde + ctilde
+    lambda_3_roe = utilde + ctilde
+
+    # Entropy correction Harten-Hyman
+
+    ei = uhati - jnp.sqrt(g*hi)
+    ej = uhatj - jnp.sqrt(g*hj)
+    mask_i = (ei < 0.0) & (ej > 0.0)
+
+    lambda_E1 = jnp.where(mask_i, lambda_1_roe - ei*(ej-lambda_1_roe)/(ej-ei), 0.0)
+    lambda_1 = jnp.where(mask_i, ei*(ej-lambda_1_roe)/(ej-ei), lambda_1_roe)
+
+    # lambda_3
+    ei = uhati + jnp.sqrt(g*hi)
+    ej = uhatj + jnp.sqrt(g*hj)
+
+    mask_j = (ei < 0.0) & (ej > 0.0)
+    
+    lambda_E3 = jnp.where(mask_j, lambda_3_roe - ej*(lambda_3_roe-ei)/(ej-ei), 0.0)
+    lambda_3 = jnp.where(mask_j, ej*(lambda_3_roe-ei)/((ej-ei)+VEL_TOL), lambda_3_roe)
+    
+    lambda_E2 = jnp.zeros_like(lambda_E3) 
+    lambdas_E = jnp.stack([lambda_E1, lambda_E2, lambda_E3], axis=-1)
+    # Entropy correction Harten-Hyman
 
     lambdas = jnp.stack([lambda_1, lambda_2, lambda_3], axis=-1)
 
@@ -389,7 +409,7 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     vel = jnp.sqrt(utilde**2 + vtilde**2)
 
     Sf = (ntilde**2 * vel * utilde) / jnp.maximum(DRY_TOL, htilde**(4/3))
-    T = -g * htilde * Sf
+    T = -g * htilde * Sf *dx
 
     ST = S + T
 
