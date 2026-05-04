@@ -1,0 +1,324 @@
+boundaries:
+  down_1:
+    normal:
+    - 0.0
+    - -1.0
+    polygon:
+    - - 0.0
+      - 0.0
+    - - 1.76
+      - 0.0
+    - - 1.76
+      - 0.01
+    - - 0.0
+      - 0.01
+    type: Reflective
+    values:
+    - NaN
+    - NaN
+    - 0.0
+    - NaN
+  down_2:
+    normal:
+    - 0.0
+    - -1.0
+    polygon:
+    - - 1.76
+      - 2.8
+    - - 11.59
+      - 2.8
+    - - 11.59
+      - 2.81
+    - - 1.76
+      - 2.81
+    type: Reflective
+    values:
+    - NaN
+    - NaN
+    - 0.0
+    - NaN
+  down_3:
+    normal:
+    - 1.0
+    - 0.0
+    polygon:
+    - - 1.75
+      - 0.0
+    - - 1.76
+      - 0.0
+    - - 1.76
+      - 2.8
+    - - 1.75
+      - 2.8
+    type: Reflective
+    values:
+    - NaN
+    - 0.0
+    - NaN
+    - NaN
+  down_4:
+    normal:
+    - 1.0
+    - 0.0
+    polygon:
+    - - 11.59
+      - 2.8
+    - - 11.6
+      - 2.8
+    - - 11.6
+      - 4.1
+    - - 11.59
+      - 4.1
+    type: Reflective
+    values:
+    - NaN
+    - 0.0
+    - NaN
+    - NaN
+  down_5:
+    normal:
+    - 0.0
+    - -1.0
+    polygon:
+    - - 11.59
+      - 4.1
+    - - 12.59
+      - 4.1
+    - - 12.59
+      - 4.11
+    - - 11.59
+      - 4.11
+    type: Reflective
+    values:
+    - NaN
+    - NaN
+    - 0.0
+    - NaN
+  down_6:
+    normal:
+    - -1.0
+    - 0.0
+    polygon:
+    - - 12.09
+      - 2.8
+    - - 12.1
+      - 2.8
+    - - 12.1
+      - 4.1
+    - - 12.09
+      - 4.1
+    type: Reflective
+    values:
+    - NaN
+    - 0.0
+    - NaN
+    - NaN
+  down_7:
+    normal:
+    - 0.0
+    - -1.0
+    polygon:
+    - - 12.59
+      - 2.8
+    - - 27.59
+      - 2.8
+    - - 27.59
+      - 2.81
+    - - 12.59
+      - 2.81
+    type: Reflective
+    values:
+    - NaN
+    - NaN
+    - 0.0
+    - NaN
+  left:
+    normal:
+    - -1.0
+    - 0.0
+    polygon:
+    - - 0.0
+      - 0.0
+    - - 0.01
+      - 0.0
+    - - 0.01
+      - 9.2
+    - - 0.0
+      - 9.2
+    type: Reflective
+    values:
+    - NaN
+    - 0.0
+    - NaN
+    - NaN
+  right:
+    normal:
+    - 1.0
+    - 0.0
+    polygon:
+    - - 27.58
+      - 2.8
+    - - 27.59
+      - 2.8
+    - - 27.59
+      - 6.4
+    - - 27.58
+      - 6.4
+    type: Transmissive
+    values:
+    - NaN
+    - NaN
+    - NaN
+    - NaN
+  up_1:
+    normal:
+    - 0.0
+    - 1.0
+    polygon:
+    - - 12.59
+      - 6.4
+    - - 27.59
+      - 6.4
+    - - 27.59
+      - 6.41
+    - - 12.59
+      - 6.41
+    type: Reflective
+    values:
+    - NaN
+    - NaN
+    - 0.0
+    - NaN
+  up_2:
+    normal:
+    - -1.0
+    - 0.0
+    polygon:
+    - - 12.59
+      - 5.1
+    - - 12.6
+      - 5.1
+    - - 12.6
+      - 6.4
+    - - 12.59
+      - 6.4
+    type: Reflective
+    values:
+    - NaN
+    - 0.0
+    - NaN
+    - NaN
+  up_3:
+    normal:
+    - 0.0
+    - 1.0
+    polygon:
+    - - 11.59
+      - 5.1
+    - - 12.59
+      - 5.1
+    - - 12.59
+      - 5.11
+    - - 11.59
+      - 5.11
+    type: Reflective
+    values:
+    - NaN
+    - NaN
+    - 0.0
+    - NaN
+  up_4:
+    normal:
+    - 1.0
+    - 0.0
+    polygon:
+    - - 11.59
+      - 5.1
+    - - 11.6
+      - 5.1
+    - - 11.6
+      - 6.4
+    - - 11.59
+      - 6.4
+    type: Reflective
+    values:
+    - NaN
+    - 0.0
+    - NaN
+    - NaN
+  up_5:
+    normal:
+    - 0.0
+    - 1.0
+    polygon:
+    - - 1.76
+      - 6.39
+    - - 11.59
+      - 6.39
+    - - 11.59
+      - 6.4
+    - - 1.76
+      - 6.4
+    type: Reflective
+    values:
+    - NaN
+    - NaN
+    - 0.0
+    - NaN
+  up_6:
+    normal:
+    - 1.0
+    - 0.0
+    polygon:
+    - - 1.75
+      - 6.4
+    - - 1.76
+      - 6.4
+    - - 1.76
+      - 9.2
+    - - 1.75
+      - 9.2
+    type: Reflective
+    values:
+    - NaN
+    - 0.0
+    - NaN
+    - NaN
+  up_7:
+    normal:
+    - 0.0
+    - 1.0
+    polygon:
+    - - 0.0
+      - 9.19
+    - - 1.76
+      - 9.19
+    - - 1.76
+      - 9.2
+    - - 0.0
+      - 9.2
+    type: Reflective
+    values:
+    - NaN
+    - NaN
+    - 0.0
+    - NaN
+cfl: 0.5
+end_time: 20.0
+erosion:
+  bulk_porosity: 0.41
+  grass_factor: MPM
+  sediments:
+    sed1:
+      density: 2630
+      deposition_flux: 0.01
+      diameter: 0.00162
+      erosion_flux: 0.04
+      fraction: 1.0
+flux_scheme: Roe Exner
+input_file: T_domain_2.nc
+integrator: Forward Euler
+out_freq: 0.25
+output_file: T_domain_out_2.nc
+parNx: 1
+parNy: 1
