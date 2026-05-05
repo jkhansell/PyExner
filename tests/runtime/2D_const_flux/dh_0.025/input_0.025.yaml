@@ -1,0 +1,111 @@
+boundaries:
+  bottom:
+    normal:
+    - 0.0
+    - -1.0
+    polygon:
+    - - 0.0
+      - -0.025
+    - - 7.025
+      - -0.025
+    - - 7.025
+      - 0.025
+    - - 0.0
+      - 0.025
+    type: Reflective
+    values:
+    - 0
+    - 0
+    - 0
+    - 0
+  inlet_bed:
+    normal:
+    - -1.0
+    - 0.0
+    polygon:
+    - - 0.0
+      - 0.0
+    - - 0.025
+      - 0.0
+    - - 0.025
+      - 1.0
+    - - 0.0
+      - 1.0
+    type: Berthon
+    values:
+    - 1.0
+    - 0.005
+    - 0.005
+    - 0.005
+    - 1
+    - 0.0125
+  inlet_flux:
+    normal:
+    - -1.0
+    - 0.0
+    polygon:
+    - - 0.0
+      - 0.0
+    - - 0.025
+      - 0.0
+    - - 0.025
+      - 1.0
+    - - 0.0
+      - 1.0
+    type: ConstantInflux
+    values:
+    - 1.0
+    - 1.0
+    - 0.0
+  outlet_bed:
+    normal:
+    - 1.0
+    - 0.0
+    polygon:
+    - - 6.975
+      - 0.0
+    - - 7.025
+      - 0.0
+    - - 7.025
+      - 1.025
+    - - 6.975
+      - 1.025
+    type: NormalFlowDepth
+    values:
+    - 1.0
+    - 0.005
+    - 0.005
+    - 0.005
+    - 1
+    - 6.9875
+  top:
+    normal:
+    - 0.0
+    - 1.0
+    polygon:
+    - - 0.0
+      - 1.025
+    - - 7.025
+      - 1.025
+    - - 7.025
+      - 0.975
+    - - 0.0
+      - 0.975
+    type: Reflective
+    values:
+    - 0
+    - 0
+    - 0
+    - 0
+cfl: 0.5
+end_time: 10
+erosion:
+  grass_factor: 0.005
+flux_scheme: Roe Exner
+input_file: analytical_case_0.025.nc
+integrator: Forward Euler
+io_freq: 1.0
+out_freq: 1.0
+output_file: analytical_case_0.025_out.nc
+parNx: 1
+parNy: 1

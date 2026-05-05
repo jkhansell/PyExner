@@ -117,20 +117,36 @@ class BoundaryManager:
         # Instantiate handler objects
         for i, key in enumerate(self.boundary_specs.keys()):
             btype = self.flux_scheme+" "+self.boundary_specs[key]["type"]
+            print(f"Registered Boundary: {btype}")
             normal = normals[i]
             mask = masks[i] 
 
             try:
                 handler_cls = BOUNDARY_REGISTRY[btype]
-                if "Reflective" in btype or "Transmissive" in btype:
+                      
+                if "Reflective" in btype or "Transmissive" in btype or "SteepFall" in btype:
                     b_idx, i_idx = compute_reflective_indices(mask, normal)
-                    
                     handler = handler_cls(
                         mask=mask,
                         normal=normal,
                         boundary_indices=b_idx,
                         interior_indices=i_idx,
                     )
+
+                elif ("ConstantInflux" in btype or 
+                      "ConstantOutflux" in btype or 
+                      "NormalFlowDepth" in btype or 
+                      "Berthon" in btype
+                    ):
+                    b_idx, i_idx = compute_reflective_indices(mask, normal)
+                    handler = handler_cls(
+                        mask=mask,
+                        normal=normal,
+                        values=boundary_values[i],
+                        boundary_indices=b_idx,
+                        interior_indices=i_idx,
+                    )
+
                 else:
                     handler = handler_cls(
                         mask=mask,

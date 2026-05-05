@@ -18,7 +18,6 @@ m), and S3 (y = 1.45 m).
 
 """
 
-
 # constants
 data = xr.open_dataset("erodible_channel_out.nc")
 
@@ -56,17 +55,18 @@ def plot_line_profiles():
         "S2": 0.7, 
         "S3": 1.45, 
     }
-
-    z = data.z_b.isel(t=-1)
+    z_b = data.z_b.isel(t=-1)
+    z = data.z.isel(t=-1)
 
     line_indices = {}
     for name, y_coord in lines.items():
-        y_target = 9.2/2 + y_coord
+        y_target = y_coord
         iy = np.argmin(np.abs(data.y.values - y_target))
         
         line_indices[name] = iy
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
+   
     axes = axes.flatten()
 
     for i, (name, iy) in enumerate(line_indices.items()):
@@ -75,8 +75,7 @@ def plot_line_profiles():
         # Plot a line for each specific timestep
         # Extract Z values along the entire Y axis for the fixed X index
         # shape will be (len(dataset.y))
-        profile = z.isel(y=iy).sel(x=slice(1.76 + 10.33 + 0.5, 1.76 + 10.33 + 0.5 + 8))
-
+        profile = z_b.isel(y=iy).sel(x=slice(0.5, 9.0)) - 0.155
         actual_time = time_array[-1]
         print(actual_time)
         # plot experimental envelope
@@ -85,11 +84,11 @@ def plot_line_profiles():
         for j, file in enumerate(expfiles):
             df = pd.read_csv(os.path.join("experimental_results", file), skipinitialspace=True).sort_values("x")
             ax.scatter(df.iloc[:,0], df.iloc[:,1], label=f"Exp {file.split('exp')[-1][:-4]}", 
-            marker=markers[j % len(markers)], 
-            color="black",
-            s=10,
-            zorder=1
-        )
+                marker=markers[j % len(markers)], 
+                color="black",
+                s=10,
+                zorder=1
+            )
             expdfs.append(df)
 
         if len(expdfs) > 0:
@@ -108,12 +107,13 @@ def plot_line_profiles():
             df = pd.read_csv(os.path.join("experimental_results", file), skipinitialspace=True).sort_values("x")
             ax.plot(df.iloc[:,0], df.iloc[:,1], label=f"{file[3:-4]}", c=colors[j % len(colors)], zorder=2)
 
-        ax.plot(profile.x - (1.76 + 10.33 + 0.5) + 0.5, profile.values, label=f"PyExner", zorder=3, color="blue")
+        ax.plot(profile.x, profile.values, label=f"PyExner", zorder=3, color="blue")
 
         ax.set_title(f"Cross-section at {name} (y={lines[name]})", fontweight='bold')
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize='small', ncol=2)
         ax.set_xlim(0.0, 8.0)
+        ax.set_ylim(-0.05, 0.15)
 
     fig.savefig("lines.png", dpi=250)
     plt.close()
@@ -133,8 +133,8 @@ def plot_time_series():
     for name, coords in points.items():
         px, py = coords
 
-        px_target = 1.76 + 10.33 + px  
-        py_target = 9.2/2 + py 
+        px_target = 1.0 + px  
+        py_target = py 
 
         # Find the index of the closest value
         idx_x = np.argmin(np.abs(data.x.values - px_target))
@@ -151,7 +151,7 @@ def plot_time_series():
     for time_step in range(len(time_array)):
         for name, (iy, ix) in point_indices.items():
             # Access the value and append to the specific point's list
-            val = data.z_b.values[time_step, iy, ix] + data.h.values[time_step, iy, ix]
+            val = data.z_b.values[time_step, iy, ix] + data.z.values[time_step, iy, ix] + data.h.values[time_step, iy, ix]
             eta_vals[name].append(val)
 
     # Optional: Convert lists to numpy arrays for easier plotting/math later
@@ -172,7 +172,7 @@ def plot_time_series():
                 ax.scatter(df.iloc[:,0], df.iloc[:,1], label=f"{file[3:-4]}", marker=".", c=colors[j % len(colors)], zorder=2)
             else:
                 ax.plot(df.iloc[:,0], df.iloc[:,1], label=f"{file[3:-4]}", c=colors[j % len(colors)], zorder=2)
-            
+             
         ax.plot(time_array, values, color='tab:blue', linewidth=1.5, label="PyExner")
         ax.set_title(f"Point {name}", fontweight='bold')
         ax.grid(True, alpha=0.3)
@@ -194,17 +194,17 @@ def plot_images():
     for i, idt in enumerate(time_array):
         print(f"Timestep: {i % 10}")
 
-        G = data.G[i].sel(x=slice(10, 24), y=slice(9.2/2+0.5+1.3, 9.2/2-0.5-1.3))
-        h = data.h[i].sel(x=slice(10, 24), y=slice(9.2/2+0.5+1.3, 9.2/2-0.5-1.3))
-        z = data.z[i].sel(x=slice(10, 24), y=slice(9.2/2+0.5+1.3, 9.2/2-0.5-1.3))
-        z_b = data.z_b[i].sel(x=slice(10, 24), y=slice(9.2/2+0.5+1.3, 9.2/2-0.5-1.3))
+        x_sl = slice(-2.1, 11.9)
+        y_sl = slice(1.8, -1.8)
+
+        G = data.G[i].sel(x=x_sl, y=y_sl)
+        h = data.h[i].sel(x=x_sl, y=y_sl)
+        z = data.z[i].sel(x=x_sl, y=y_sl)
+        z_b = data.z_b[i].sel(x=x_sl, y=y_sl)
 
         eps = 1e-12
-        u = data.hu[i].sel(x=slice(10, 24),
-                        y=slice(9.2/2+0.5+1.3, 9.2/2-0.5-1.3)) / (h + eps)
-
-        v = data.hv[i].sel(x=slice(10, 24),
-                        y=slice(9.2/2+0.5+1.3, 9.2/2-0.5-1.3)) / (h + eps)
+        u = data.hu[i].sel(x=x_sl, y=y_sl) / (h + eps)
+        v = data.hv[i].sel(x=x_sl, y=y_sl) / (h + eps)
 
         umag = np.sqrt(u**2 + v**2)
 
@@ -216,7 +216,7 @@ def plot_images():
 
         # --- Free surface ---
         im0 = axs[0, 0].imshow(h + z_b + z,
-                            cmap="jet",
+                            cmap="jet", norm="log",
                             extent=extent)
         axs[0, 0].set_title(r"Free surface $(h + z_b + z) [m]$")
         plt.colorbar(im0, ax=axs[0, 0])
@@ -228,7 +228,7 @@ def plot_images():
                             extent=extent)
         axs[0, 1].set_title(r"Bed elevation $(z_b + z) [m]$")
         plt.colorbar(im1, ax=axs[0, 1])
-        im1.set_clim(0.1, 0.3)
+        im1.set_clim(0.0, 0.12)
 
         # --- Exner flux / G ---
         im2 = axs[1, 0].imshow(G,
@@ -251,7 +251,8 @@ def plot_images():
 
         plt.savefig(f"fields/fields_{i:04d}.png", dpi=250)
         plt.close()
-        y_target = 9.2/2 - 0.5
+        
+        y_target = -0.5
         iy = np.argmin(np.abs(data.y.values - y_target))
 
         h_slice = data.h[i, iy]
@@ -300,8 +301,8 @@ def plot_images():
 
 if __name__ == "__main__":
     plot_line_profiles()
-    print("Lines plotted")
+    #print("Lines plotted")
     plot_time_series()
-    print("Time series plotted")
+    #print("Time series plotted")
     plot_images()
     print("Images plotted")
