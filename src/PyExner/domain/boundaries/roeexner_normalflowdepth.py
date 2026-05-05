@@ -44,10 +44,10 @@ class RoeExner_NormalFlowDepthBoundary:
         # bed copy (or extrapolate later)
 
         return state.replace(
-            h=state.h.at[by, bx].set(h),
-            hu=state.hu.at[by, bx].set(state.hu[iy, ix]),
-            hv=state.hv.at[by, bx].set(state.hv[iy, ix]),
-            z_b=state.z_b.at[by, bx].set(zb)
+            h=state.h.at[by, bx].set(h), # Analytical head h
+            hu=state.hu.at[by, bx].set(state.hu[iy, ix]), # Transmissive Flux
+            hv=state.hv.at[by, bx].set(state.hv[iy, ix]), # Transmissive Flux
+            z_b=state.z_b.at[by, bx].set(zb) # Analytical bed
         )
 
 

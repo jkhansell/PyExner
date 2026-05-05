@@ -22,19 +22,12 @@ class RoeExner_TransmissiveBoundary:
         h  = state.h[iy, ix]
         hu = state.hu[iy, ix]
         hv = state.hv[iy, ix]
-        z_b  = state.z_b[iy, ix]
-        n  = state.n[iy, ix]
-        G  = state.G[iy, ix]
-
         # normal / tangential velocity
         
         return state.replace(
             h  = state.h.at[by, bx].set(h),
             hu = state.hu.at[by, bx].set(hu),
             hv = state.hv.at[by, bx].set(hv),
-            z_b  = state.z_b.at[by, bx].set(z_b),
-            n  = state.n.at[by, bx].set(n),
-            G  = state.G.at[by, bx].set(G),
         )
 
 

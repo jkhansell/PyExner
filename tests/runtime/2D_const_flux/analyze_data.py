@@ -157,5 +157,7 @@ plot_heatmap(t, "h")
 plot_heatmap(t, "hu")
 plot_heatmap(t, "hv")
 plot_heatmap(t, "z_b")
+plot_heatmap(t, "n")
+plot_heatmap(t, "n_b")
 
 print("Saved figures in:", outdir)

@@ -55,8 +55,8 @@ def plot_line_profiles():
         "S2": 0.7, 
         "S3": 1.45, 
     }
-
-    z = data.z_b.isel(t=-1)
+    z_b = data.z_b.isel(t=-1)
+    z = data.z.isel(t=-1)
 
     line_indices = {}
     for name, y_coord in lines.items():
@@ -75,8 +75,7 @@ def plot_line_profiles():
         # Plot a line for each specific timestep
         # Extract Z values along the entire Y axis for the fixed X index
         # shape will be (len(dataset.y))
-        profile = z.isel(y=iy).sel(x=slice(1.0, 9.0))
-
+        profile = z_b.isel(y=iy).sel(x=slice(0.5, 9.0)) - 0.155
         actual_time = time_array[-1]
         print(actual_time)
         # plot experimental envelope
@@ -108,12 +107,13 @@ def plot_line_profiles():
             df = pd.read_csv(os.path.join("experimental_results", file), skipinitialspace=True).sort_values("x")
             ax.plot(df.iloc[:,0], df.iloc[:,1], label=f"{file[3:-4]}", c=colors[j % len(colors)], zorder=2)
 
-        ax.plot(profile.x - 1.0, profile.values, label=f"PyExner", zorder=3, color="blue")
+        ax.plot(profile.x, profile.values, label=f"PyExner", zorder=3, color="blue")
 
         ax.set_title(f"Cross-section at {name} (y={lines[name]})", fontweight='bold')
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize='small', ncol=2)
         ax.set_xlim(0.0, 8.0)
+        ax.set_ylim(-0.05, 0.15)
 
     fig.savefig("lines.png", dpi=250)
     plt.close()
@@ -151,7 +151,7 @@ def plot_time_series():
     for time_step in range(len(time_array)):
         for name, (iy, ix) in point_indices.items():
             # Access the value and append to the specific point's list
-            val = data.z_b.values[time_step, iy, ix] + data.h.values[time_step, iy, ix]
+            val = data.z_b.values[time_step, iy, ix] + data.z.values[time_step, iy, ix] + data.h.values[time_step, iy, ix]
             eta_vals[name].append(val)
 
     # Optional: Convert lists to numpy arrays for easier plotting/math later
@@ -216,7 +216,7 @@ def plot_images():
 
         # --- Free surface ---
         im0 = axs[0, 0].imshow(h + z_b + z,
-                            cmap="jet",
+                            cmap="jet", norm="log",
                             extent=extent)
         axs[0, 0].set_title(r"Free surface $(h + z_b + z) [m]$")
         plt.colorbar(im0, ax=axs[0, 0])
@@ -228,7 +228,7 @@ def plot_images():
                             extent=extent)
         axs[0, 1].set_title(r"Bed elevation $(z_b + z) [m]$")
         plt.colorbar(im1, ax=axs[0, 1])
-        im1.set_clim(0.1, 0.3)
+        im1.set_clim(0.0, 0.12)
 
         # --- Exner flux / G ---
         im2 = axs[1, 0].imshow(G,
@@ -300,9 +300,9 @@ def plot_images():
 
 
 if __name__ == "__main__":
-    #plot_line_profiles()
+    plot_line_profiles()
     #print("Lines plotted")
-    #plot_time_series()
+    plot_time_series()
     #print("Time series plotted")
     plot_images()
     print("Images plotted")

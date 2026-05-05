@@ -142,9 +142,6 @@ def compute_G_factory(is_constant: bool):
 
     return 3*_lambda**2 - 4*utilde*_lambda + utilde**2 - ctilde**2
 
-def _get_theta(_lambda, utilde, ctilde):
-    return 3*_lambda**2 - 4*utilde*_lambda + utilde**2 - ctilde**2
-
 def _get_approx_lambda(_lambda, atilde, utilde, ctilde):
     theta = _get_theta(_lambda, utilde, ctilde)
 
@@ -308,6 +305,7 @@ def compute_dt_2D(state: RoeExnerState, dx, mask):
 
     return dt
 
+#@jax.jit
 @jax.jit
 def roe_solver(si, sj, nx: float, ny: float, dx: float):
     hi, hui, hvi, z_bi, zi, ni = si
@@ -319,20 +317,27 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     sqrt_i = jnp.sqrt(hi)
     sqrt_j = jnp.sqrt(hj)
 
-    # Velocities
+    # Calculate velocities, handling dry beds
     ui = jnp.where(hi > DRY_TOL, hui/hi, 0.0)
     vi = jnp.where(hi > DRY_TOL, hvi/hi, 0.0)
 
     uj = jnp.where(hj > DRY_TOL, huj/hj, 0.0)
     vj = jnp.where(hj > DRY_TOL, hvj/hj, 0.0)
 
-    # Rotate to normal/tangential
-    uhati = ui * nx + vi * ny
-    vhati = -ui * ny + vi * nx
+
+    # --- Rotate problem to (normal, tangential) coordinate frame ---
+    
+    uhati = ui * nx + vi * ny   # Normal velocity component
+    vhati = -ui * ny + vi * nx  # Tangential velocity component
 
     uhatj = uj * nx + vj * ny
     vhatj = -uj * ny + vj * nx
 
+    # --- Roe Averages ---
+    # To handle dry/wet transitions robustly, consider the 'h' average carefully.
+    # The (sqrt_i + sqrt_j) in the denominator could be zero if both are dry.
+    # Add an epsilon to the denominator or use a more robust average for dry states.
+    
     htilde = 0.5*(hi + hj)
     ctilde = jnp.sqrt(g*htilde)
 
@@ -368,86 +373,146 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
 
     lambdas = jnp.stack([lambda_1, lambda_2, lambda_3], axis=-1)
 
-    # Eigenvectors
     P = jnp.stack([
-        jnp.stack([jnp.ones_like(vtilde), jnp.zeros_like(vtilde), jnp.ones_like(vtilde)], axis=-1),
-        jnp.stack([lambda_1,             jnp.zeros_like(vtilde),  lambda_3], axis=-1),
-        jnp.stack([vtilde,               ctilde,                  vtilde], axis=-1)
+        jnp.stack([jnp.ones_like(vtilde), jnp.zeros_like(vtilde), jnp.ones_like(vtilde)],axis=-1),
+        jnp.stack([lambda_1,             jnp.zeros_like(vtilde),             lambda_3],axis=-1),
+        jnp.stack([vtilde,               ctilde,                              vtilde],axis=-1)
     ], axis=-2)
 
-    # Inverse
+    # Construct the elements of the inner matrix (before factoring out 1/(2c))
     denom = lambda_1 - lambda_3
     denom = jnp.where(jnp.abs(denom) < VEL_TOL, jnp.sign(denom) * VEL_TOL, denom)
-
+    
     P_inv = jnp.stack([
-        jnp.stack([-lambda_3/denom,  jnp.ones_like(utilde)/denom,  jnp.zeros_like(utilde)], axis=-1),
-        jnp.stack([-vtilde/ctilde,   jnp.zeros_like(utilde),       jnp.ones_like(utilde)/ctilde], axis=-1),
-        jnp.stack([lambda_1/denom,  -jnp.ones_like(utilde)/denom,  jnp.zeros_like(utilde)], axis=-1)
+        jnp.stack([-lambda_3/denom,      jnp.ones_like(utilde)/denom,     jnp.zeros_like(utilde)], axis=-1),
+        jnp.stack([-vtilde/ctilde,       jnp.zeros_like(utilde),          jnp.ones_like(utilde)/ctilde], axis=-1),
+        jnp.stack([lambda_1/denom,       -jnp.ones_like(utilde)/denom,    jnp.zeros_like(utilde)], axis=-1)
     ], axis=-2)
 
-    # Conservative jump
-    dh  = hj - hi
+    # Calculate Inverse of P
+    #P_inv = np.linalg.inv(P)
+
+    # --- Difference in Conservative Variables (dU = Uj - Ui) ---
+    dh = hj - hi
+    # Note: dhu and dhv here are differences in normal and tangential momentum, not global.
     dhu = hj * uhatj - hi * uhati
     dhv = hj * vhatj - hi * vhati
 
-    dU = jnp.stack([dh, dhu, dhv], axis=-1)
-
-    # Wave strengths (eq 59)
+    dU = jnp.stack([dh, dhu, dhv],axis=-1)
+        # --- Wave Strengths (alphas) ---
+    # alphas = P_inv * dU
     alphas = jnp.einsum("...ji,...i->...j", P_inv, dU)
 
-    # =========================
-    # SOURCE TERMS (eq 60 EXACT)
-    # =========================
+    # --- Source Terms ---
+    # Based on "http://dx.doi.org/10.1016/j.jcp.2010.02.016" 
+    
+    # handle sediment bed 
 
-    dzb = (z_bj+zj) - (z_bi+zi)
+    z_bi = jnp.where(z_bi > SED_TOL, z_bi, SED_TOL)
+    z_bj = jnp.where(z_bj > SED_TOL, z_bj, SED_TOL)
 
-    # Bed slope
-    S = -g * htilde * dzb
+    dz = (zj+z_bj) - (zi+z_bi)
+    di = hi + (zi+z_bi)
+    dj = hj + (zj+z_bj)
+    dd = dj - di # Difference in total water depth
 
-    # Friction
-    ntilde = 0.5 * (ni + nj)
-    vel = jnp.sqrt(utilde**2 + vtilde**2)
+    # Topographic source term (pressure gradient due to bed slope)
+    # This is a specific well-balanced formulation.
+    #thrust = -g * htilde * dz
+    thrust_a = -g * htilde * dz
 
-    Sf = (ntilde**2 * vel * utilde) / jnp.maximum(DRY_TOL, htilde**(4/3))
-    T = -g * htilde * Sf *dx
+    # Alternative thrust calculation for specific dry/wet conditions
+    mask1_dz = (dz >= 0) & (di < zj+z_bj)
+    mask2_dz = (dz < 0) & (dj < zi+z_bi)
+    
+    dztilde = jnp.where(mask1_dz, hi, jnp.where(mask2_dz, hj, dz))
+    
+    hr = jnp.where(dz >= 0, hi, hj) # Choose upstream or downstream h for reference height
+    thrust_b = -g * (hr - 0.5 * jnp.abs(dztilde)) * dztilde
 
-    ST = S + T
+    # Combined thrust using specific conditions
+    # This condition aims to correctly handle dry/wet fronts and supercritical/subcritical flow.
+    # The condition (dz*dd >= 0.0) is often related to avoiding oscillations when the flow passes
+    # over a hump or depression, and (utilde*dz > 0.0) when flow is moving uphill.
+    mask_thrust = (dz * dd >= 0.0) & (utilde * dz > 0.0)
+    thrust = jnp.where(mask_thrust, jnp.maximum(thrust_a, thrust_b), thrust_b)
+    
+    both_dry = (hi < DRY_TOL) & (hj < DRY_TOL)
+    thrust = jnp.where(both_dry, 0.0, thrust)
 
-    beta1 = -ST / (2 * ctilde)
-    beta2 = jnp.zeros_like(beta1)
-    beta3 =  ST / (2 * ctilde)
+    # friction
 
-    betas = jnp.stack([beta1, beta2, beta3], axis=-1)
+    ntilde = 0.5*(ni+nj)
+    sf = (ntilde**2*jnp.sqrt(utilde**2+vtilde**2)*utilde)/(jnp.maximum(DRY_TOL, htilde**(4/3)))
+    tau = g*htilde*sf*dx
 
-    # =========================
-    # FLUX ASSEMBLY
-    # =========================
+    Tn = jnp.stack([
+        jnp.zeros_like(htilde),
+        thrust-tau,
+        jnp.zeros_like(htilde)
+    ], axis=-1)
 
-    upwP = jnp.zeros_like(alphas)
-    upwM = jnp.zeros_like(alphas)
+    betas = jnp.einsum("...ji,...i->...j", P_inv, Tn)
+    
+    h_i1star = hi + alphas[...,0] - jnp.where(jnp.abs(lambdas[...,0]) > VEL_TOL, 
+                                            betas[...,0]/lambdas[...,0], 0.0)
+    h_j3star = hj - alphas[...,2] + jnp.where(jnp.abs(lambdas[...,2]) > VEL_TOL,
+                                            betas[...,2]/lambdas[...,2], 0.0)
 
-    def body(i, carry):
+    # Exner formulation requires unmodified source terms to extend up to interaction factors G=0.01
+    
+    upwP = jnp.zeros_like(lambdas)
+    upwM = jnp.zeros_like(lambdas)
+
+    mask_1 = (hi < DRY_TOL) & (h_i1star < 0.0) 
+    mask_2 = (hj < DRY_TOL) & (h_j3star < 0.0)
+
+        # --- First loop: Roe with betas ---
+    def roe_body(i, upwinds):
+        upwP, upwM = upwinds
+
+        _lambda = jnp.expand_dims(lambdas[..., i], axis=-1)
+        _alpha = jnp.expand_dims(alphas[..., i], axis=-1)
+        _beta = jnp.expand_dims(betas[..., i], axis=-1)
+        P_i = P[..., i]  # shape [..., num_vars]
+
+        flux = (_lambda * _alpha - _beta) * P_i
+
+        mask_1x = jnp.expand_dims(mask_1, axis=-1)
+        mask_2x = jnp.expand_dims(mask_2, axis=-1)
+
+        flux_pos = jnp.where(mask_2x, 0.0,
+                     jnp.where(mask_1x, flux,
+                       jnp.where(_lambda > 0.0, flux, 0.0)))
+        
+        flux_neg = jnp.where(mask_2x, flux,
+                     jnp.where(mask_1x, 0.0,
+                       jnp.where(_lambda <= 0.0, flux, 0.0)))
+
+        return (upwP + flux_pos, upwM + flux_neg)
+
+    upwP, upwM = jax.lax.fori_loop(0, lambdas.shape[-1], roe_body, (upwP, upwM))
+
+    # --- Second loop: Entropy fix contribution ---
+    def entropy_body(i, carry):
         upwP, upwM = carry
 
-        lam = jnp.expand_dims(lambdas[..., i], -1)
-        alpha = jnp.expand_dims(alphas[..., i], -1)
-        beta  = jnp.expand_dims(betas[..., i], -1)
-
+        _lambda_E = jnp.expand_dims(lambdas_E[..., i], axis=-1)
+        _alpha = jnp.expand_dims(alphas[..., i], axis=-1)
         P_i = P[..., i]
 
-        flux = (lam * alpha - beta) * P_i
+        flux = _lambda_E * _alpha * P_i
 
-        flux_pos = jnp.where(lam > 0.0, flux, 0.0)
-        flux_neg = jnp.where(lam <= 0.0, flux, 0.0)
+        flux_pos = jnp.where(_lambda_E > 0.0, flux, 0.0)
+        flux_neg = jnp.where(_lambda_E <= 0.0, flux, 0.0)
 
-        return upwP + flux_pos, upwM + flux_neg
+        return (upwP + flux_pos, upwM + flux_neg)
 
-    upwP, upwM = jax.lax.fori_loop(0, 3, body, (upwP, upwM))
+    upwP, upwM = jax.lax.fori_loop(0, lambdas_E.shape[-1], entropy_body, (upwP, upwM))
 
-    # Rotate back
     Tk_inv = jnp.array([[1,  0,   0],
-                        [0, nx, -ny],
-                        [0, ny,  nx]])
+                       [0, nx, -ny],
+                       [0, ny,  nx]])
 
     upwP = jnp.einsum('ji,...i->...j', Tk_inv, upwP)
     upwM = jnp.einsum('ji,...i->...j', Tk_inv, upwM)

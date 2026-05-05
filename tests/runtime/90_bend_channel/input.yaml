@@ -121,3 +121,13 @@ boundaries:
       - [6.2300, 3.8200]
     values: [NaN, NaN, NaN, NaN]
     normal: [0.0, 1.0]
+
+  top:
+    type: SteepFall
+    polygon:
+      - [6.2300, 3.8150]
+      - [6.7250, 3.8150]
+      - [6.7250, 3.8200]
+      - [6.2300, 3.8200]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [0.0, 1.0]

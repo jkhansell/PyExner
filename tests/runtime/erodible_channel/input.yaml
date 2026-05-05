@@ -1,5 +1,5 @@
 end_time: 20.0
-out_freq: 0.01
+out_freq: 0.25
 cfl: 0.5
 flux_scheme: Roe Exner
 integrator: Forward Euler
@@ -10,184 +10,231 @@ output_file: erodible_channel_out.nc
 
 erosion: 
   grass_factor: MPM
-  bulk_porosity: 0.44
+  bulk_porosity: 0.42
   sediments:
     sed1: 
       fraction: 1.0
-      diameter: 1.7e-3
-      density: 2650
+      diameter: 1.61e-3
+      density: 2630
       deposition_flux: 0.01
       erosion_flux: 0.01
 
 boundaries:
   # ==========================================
-  # LEFT TANK BACK WALL
+  # HORIZONTAL WALLS (Processed First)
   # ==========================================
-  left:
+  down_1: # Left Tank Bottom
     type: Reflective
     polygon:
-      - [-12.090, -4.600]
-      - [-12.080, -4.600]
-      - [-12.080,  4.600]
-      - [-12.090,  4.600]
-    values: [NaN, 0.0, NaN, NaN]
-    normal: [-1.0, 0.0]
-
-  # ==========================================
-  # BOTTOM WALLS (y < 0)
-  # ==========================================
-  down_1: # Left Tank Bottom Wall
-    type: Reflective
-    polygon:
-      - [-12.090, -4.600]
+      - [-12.090, -4.610]
+      - [-10.330, -4.610]
       - [-10.330, -4.600]
-      - [-10.330, -4.590]
-      - [-12.090, -4.590]
+      - [-12.090, -4.600]
     values: [NaN, NaN, 0.0, NaN]
     normal: [0.0, -1.0]
 
-  down_2: # Left Tank Front Face (Vertical Step In)
+  down_3: # Main Channel Bottom
     type: Reflective
     polygon:
-      - [-10.340, -4.600]
-      - [-10.330, -4.600]
-      - [-10.330, -1.800]
-      - [-10.340, -1.800]
-    values: [NaN, 0.0, NaN, NaN]
-    normal: [1.0, 0.0]
-
-  down_3: # Main Channel Bottom Wall
-    type: Reflective
-    polygon:
-      - [-10.330, -1.800]
+      - [-10.330, -1.810]
+      - [-0.500,  -1.810]
       - [-0.500,  -1.800]
-      - [-0.500,  -1.790]
-      - [-10.330, -1.790]
+      - [-10.330, -1.800]
     values: [NaN, NaN, 0.0, NaN]
     normal: [0.0, -1.0]
 
-  down_4: # Contraction Inlet Face (Vertical Step In)
+  down_5: # Contraction Bottom (Shortened)
     type: Reflective
     polygon:
-      - [-0.510, -1.800]
-      - [-0.500, -1.800]
-      - [-0.500, -0.500]
-      - [-0.510, -0.500]
-    values: [NaN, 0.0, NaN, NaN]
-    normal: [1.0, 0.0]
-
-  down_5: # Contraction Bottom Wall
-    type: Reflective
-    polygon:
-      - [-0.500, -0.500]
-      - [ 0.500, -0.500]
-      - [ 0.500, -0.490]
-      - [-0.500, -0.490]
+      - [-0.400, -0.510]
+      - [ 0.400, -0.510]
+      - [ 0.400, -0.500]
+      - [-0.400, -0.500]
     values: [NaN, NaN, 0.0, NaN]
     normal: [0.0, -1.0]
 
-  down_6: # Contraction Outlet Face (Vertical Step Out)
+  down_7: # Right Channel Bottom
     type: Reflective
     polygon:
-      - [ 0.500, -1.800]
-      - [ 0.510, -1.800]
-      - [ 0.510, -0.500]
-      - [ 0.500, -0.500]
-    values: [NaN, 0.0, NaN, NaN]
-    normal: [-1.0, 0.0]
-
-  down_7: # Right Channel Bottom Wall
-    type: Reflective
-    polygon:
-      - [ 0.500, -1.800]
+      - [ 0.500, -1.810]
+      - [15.500, -1.810]
       - [15.500, -1.800]
-      - [15.500, -1.790]
-      - [ 0.500, -1.790]
+      - [ 0.500, -1.800]
     values: [NaN, NaN, 0.0, NaN]
     normal: [0.0, -1.0]
 
-  # ==========================================
-  # TOP WALLS (y > 0)
-  # ==========================================
-  up_1: # Right Channel Top Wall
+  up_1: # Right Channel Top
     type: Reflective
     polygon:
-      - [ 0.500,  1.790]
-      - [15.500,  1.790]
-      - [15.500,  1.800]
       - [ 0.500,  1.800]
+      - [15.500,  1.800]
+      - [15.500,  1.810]
+      - [ 0.500,  1.810]
     values: [NaN, NaN, 0.0, NaN]
     normal: [0.0, 1.0]
 
-  up_2: # Contraction Outlet Face (Vertical Step Out)
+  up_3: # Contraction Top (Shortened)
     type: Reflective
     polygon:
-      - [ 0.500,  0.500]
-      - [ 0.510,  0.500]
-      - [ 0.510,  1.800]
-      - [ 0.500,  1.800]
+      - [-0.400, 0.500]
+      - [ 0.400, 0.500]
+      - [ 0.400, 0.510]
+      - [-0.400, 0.510]
+    values: [NaN, NaN, 0.0, NaN]
+    normal: [0.0, 1.0]
+
+  up_5: # Main Channel Top
+    type: Reflective
+    polygon:
+      - [-10.330, 1.800]
+      - [-0.500,  1.800]
+      - [-0.500,  1.810]
+      - [-10.330, 1.810]
+    values: [NaN, NaN, 0.0, NaN]
+    normal: [0.0, 1.0]
+
+  up_7: # Left Tank Top
+    type: Reflective
+    polygon:
+      - [-12.090, 4.600]
+      - [-10.330, 4.600]
+      - [-10.330, 4.610]
+      - [-12.090, 4.610]
+    values: [NaN, NaN, 0.0, NaN]
+    normal: [0.0, 1.0]
+
+  # ==========================================
+  # DIAGONAL WALLS (45-degree Chamfers)
+  # ==========================================
+  diag_top_left: # Inlet Top Cut
+    type: Reflective
+    polygon:
+      - [-0.510, 0.610]
+      - [-0.390, 0.490]
+      - [-0.380, 0.500]
+      - [-0.500, 0.620]
+    values: [NaN, 0.0, NaN, NaN]
+    normal: [0.707, 0.707] 
+
+  diag_bottom_left: # Inlet Bottom Cut
+    type: Reflective
+    polygon:
+      - [-0.510, -0.610]
+      - [-0.390, -0.490]
+      - [-0.380, -0.500]
+      - [-0.500, -0.620]
+    values: [NaN, 0.0, NaN, NaN]
+    normal: [0.707, -0.707] 
+
+  diag_top_right: # Outlet Top Cut
+    type: Reflective
+    polygon:
+      - [0.390, 0.490]
+      - [0.510, 0.610]
+      - [0.520, 0.600]
+      - [0.400, 0.480]
+    values: [NaN, 0.0, NaN, NaN]
+    normal: [-0.707, 0.707] 
+
+  diag_bottom_right: # Outlet Bottom Cut
+    type: Reflective
+    polygon:
+      - [0.390, -0.490]
+      - [0.510, -0.610]
+      - [0.520, -0.600]
+      - [0.400, -0.480]
+    values: [NaN, 0.0, NaN, NaN]
+    normal: [-0.707, -0.707] 
+
+  # ==========================================
+  # VERTICAL WALLS (Processed Last)
+  # ==========================================
+  left: # Left Tank Back Wall
+    type: Reflective
+    polygon:
+      - [-12.100, -4.600]
+      - [-12.090, -4.600]
+      - [-12.090,  4.600]
+      - [-12.100,  4.600]
     values: [NaN, 0.0, NaN, NaN]
     normal: [-1.0, 0.0]
 
-  up_3: # Contraction Top Wall
+  down_2: # Left Tank Front Face
     type: Reflective
     polygon:
-      - [-0.500,  0.490]
-      - [ 0.500,  0.490]
-      - [ 0.500,  0.500]
-      - [-0.500,  0.500]
-    values: [NaN, NaN, 0.0, NaN]
-    normal: [0.0, 1.0]
-
-  up_4: # Contraction Inlet Face (Vertical Step In)
-    type: Reflective
-    polygon:
-      - [-0.510,  0.500]
-      - [-0.500,  0.500]
-      - [-0.500,  1.800]
-      - [-0.510,  1.800]
+      - [-10.330, -4.600]
+      - [-10.320, -4.600]
+      - [-10.320, -1.800]
+      - [-10.330, -1.800]
     values: [NaN, 0.0, NaN, NaN]
     normal: [1.0, 0.0]
 
-  up_5: # Main Channel Top Wall
+  down_4: # Contraction Inlet Face (Shortened)
     type: Reflective
     polygon:
-      - [-10.330,  1.790]
-      - [-0.500,   1.790]
-      - [-0.500,   1.800]
-      - [-10.330,  1.800]
-    values: [NaN, NaN, 0.0, NaN]
-    normal: [0.0, 1.0]
-
-  up_6: # Left Tank Front Face (Vertical Step In)
-    type: Reflective
-    polygon:
-      - [-10.340,  1.800]
-      - [-10.330,  1.800]
-      - [-10.330,  4.600]
-      - [-10.340,  4.600]
+      - [-0.500, -1.800]
+      - [-0.490, -1.800]
+      - [-0.490, -0.600]
+      - [-0.500, -0.600]
     values: [NaN, 0.0, NaN, NaN]
     normal: [1.0, 0.0]
 
-  up_7: # Left Tank Top Wall
+  down_6: # Contraction Outlet Face (Shortened)
     type: Reflective
     polygon:
-      - [-12.090,  4.590]
-      - [-10.330,  4.590]
-      - [-10.330,  4.600]
-      - [-12.090,  4.600]
-    values: [NaN, NaN, 0.0, NaN]
-    normal: [0.0, 1.0]
+      - [0.490, -1.800]
+      - [0.500, -1.800]
+      - [0.500, -0.600]
+      - [0.490, -0.600]
+    values: [NaN, 0.0, NaN, NaN]
+    normal: [-1.0, 0.0]
 
-  # ==========================================
-  # OUTLET
-  # ==========================================
-  right:
+  up_2: # Contraction Outlet Face (Shortened)
+    type: Reflective
+    polygon:
+      - [0.490, 0.600]
+      - [0.500, 0.600]
+      - [0.500, 1.800]
+      - [0.490, 1.800]
+    values: [NaN, 0.0, NaN, NaN]
+    normal: [-1.0, 0.0]
+
+  up_4: # Contraction Inlet Face (Shortened)
+    type: Reflective
+    polygon:
+      - [-0.500, 0.600]
+      - [-0.490, 0.600]
+      - [-0.490, 1.800]
+      - [-0.500, 1.800]
+    values: [NaN, 0.0, NaN, NaN]
+    normal: [1.0, 0.0]
+
+  up_6: # Left Tank Front Face
+    type: Reflective
+    polygon:
+      - [-10.330, 1.800]
+      - [-10.320, 1.800]
+      - [-10.320, 4.600]
+      - [-10.330, 4.600]
+    values: [NaN, 0.0, NaN, NaN]
+    normal: [1.0, 0.0]
+
+  right: # Transmissive Outlet
     type: Transmissive
     polygon:
-      - [15.490, -1.800]
       - [15.500, -1.800]
+      - [15.510, -1.800]
+      - [15.510,  1.800]
       - [15.500,  1.800]
-      - [15.490,  1.800]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [1.0, 0.0]
+
+  right_bed: # Transmissive Outlet
+    type: TransmissiveBed
+    polygon:
+      - [15.500, -1.800]
+      - [15.510, -1.800]
+      - [15.510,  1.800]
+      - [15.500,  1.800]
     values: [NaN, NaN, NaN, NaN]
     normal: [1.0, 0.0]

@@ -57,7 +57,6 @@ def build_analytical_case(dh=0.1, output_name="analytical_case.nc"):
 
 if __name__ == "__main__":
 
-    build_analytical_case(dh=0.05, output_name='analytical_case.nc')
 
     # dh values
     dh_values = [0.1, 0.05, 0.025, 0.0125, 0.00625]

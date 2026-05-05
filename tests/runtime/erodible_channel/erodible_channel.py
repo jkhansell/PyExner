@@ -4,99 +4,135 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def erodible_channel():
-    dh = 0.01
+    dh = 0.01 
 
     # ==========================================
     # 1. DEFINE COORDINATE BOUNDS
-    # Origin (0,0) is at the centerline, exactly where the 10.33m and 15.5m sections meet.
-    # The 1m contraction is centered over this origin.
     # ==========================================
+    x_left_tank      = -12.09
+    x_mid_start      = -10.33
+    x_contract_start = -0.5    
+    x_contract_end   = 0.5     
+    x_right_end      = 15.5    
     
-    # X boundaries
-    x_left_tank      = -12.09  # -(10.33 + 1.76)
-    x_mid_start      = -10.33  # Start of main channel
-    x_contract_start = -0.5    # Contraction overlaps 0.5m upstream
-    x_contract_end   = 0.5     # Contraction overlaps 0.5m downstream
-    x_right_end      = 15.5    # End of the right channel
-    
-    # Y boundaries
-    y_tank_max     = 4.6             # 9.2 / 2
+    y_tank_max     = 4.6             
     y_tank_min     = -y_tank_max
-    y_channel_max  = 1.8             # 1.3 + 0.5
+    y_channel_max  = 1.8             
     y_channel_min  = -y_channel_max
-    y_contract_max = 0.5             # 1.0 / 2
+    y_contract_max = 0.5             
     y_contract_min = -y_contract_max
 
-    # Create coordinate arrays. Adding/subtracting dh/2 ensures clean boundary capture.
-    x = np.arange(x_left_tank, x_right_end + dh/2, dh)
-    y = np.arange(y_tank_max, y_tank_min - dh/2, -dh)
-
+    x = np.arange(x_left_tank + dh/2, x_right_end, dh)
+    y = np.arange(y_tank_max - dh/2, y_tank_min, -dh)
     X, Y = np.meshgrid(x, y, indexing="xy")
 
     # ==========================================
     # 2. CREATE GEOMETRY MASKS
     # ==========================================
     mask_left_tank = (X >= x_left_tank) & (X <= x_mid_start) & (Y >= y_tank_min) & (Y <= y_tank_max)
-    
-    # Upstream channel (stops at the contraction)
     mask_mid_channel = (X > x_mid_start) & (X <= x_contract_start) & (Y >= y_channel_min) & (Y <= y_channel_max)
-    
-    # The 1m Contraction (centered at x=0)
     mask_contraction = (X > x_contract_start) & (X <= x_contract_end) & (Y >= y_contract_min) & (Y <= y_contract_max)
-    
-    # Downstream channel (starts after the contraction)
     mask_right_channel = (X > x_contract_end) & (X <= x_right_end) & (Y >= y_channel_min) & (Y <= y_channel_max)
 
     valid_domain = mask_left_tank | mask_mid_channel | mask_contraction | mask_right_channel
+
+    # Add 45-degree chamfers
+    c_len = 0.1  
+    cut_TL = (X > -0.5) & (X <= -0.5 + c_len) & (Y > 0.5) & (Y <= 0.5 + c_len) & ((Y - 0.5) <= -(X - (-0.5 + c_len)))
+    cut_BL = (X > -0.5) & (X <= -0.5 + c_len) & (Y < -0.5) & (Y >= -0.5 - c_len) & ((-0.5 - Y) <= -(X - (-0.5 + c_len)))
+    cut_TR = (X < 0.5) & (X >= 0.5 - c_len) & (Y > 0.5) & (Y <= 0.5 + c_len) & ((Y - 0.5) <= (X - (0.5 - c_len)))
+    cut_BR = (X < 0.5) & (X >= 0.5 - c_len) & (Y < -0.5) & (Y >= -0.5 - c_len) & ((-0.5 - Y) <= (X - (0.5 - c_len)))
+
+    # Group chamfers to easily manage their Z elevation
+    mask_chamfers = cut_TL | cut_BL | cut_TR | cut_BR
+    
+    valid_domain = valid_domain | mask_chamfers
     nanmask = ~valid_domain
 
     # ==========================================
-    # 3. TOPOGRAPHY & SEDIMENT BED
+    # 3. TOPOGRAPHY (z) - FIXED CONCRETE GEOMETRY
     # ==========================================
-    # z: Fixed Concrete Bed. Main channel is z=0. Left tank has a 0.1m step down.
-    z = np.zeros_like(X)
-    z[mask_left_tank] = -0.1
+    # Explicit Datum Elevations
+    z_edges = 0.0          # Absolute reference
+    z_center = -0.155      # Trench depth
+    z_tank = - 0.10 # Left tank is 0.10m deeper than channel
+    target_sed_elevation = 0.085 
+    
+    # Initialize everything to the edge elevation
+    z = np.full_like(X, z_edges)
 
-    # z_b: Erodible Sediment Bed.
-    # Diagram shows sediment starting 1.5m BEFORE the junction (x = -1.5)
-    # and ending 9.0m AFTER the junction (x = 9.0).
+    # A. Excavate the flat channel bottoms (Main, Right, Contraction, AND Chamfers)
+    mask_main_flow = mask_mid_channel | mask_contraction | mask_right_channel | mask_chamfers
+    z = np.where(mask_main_flow, z_center, z)
+
+    # B. Excavate the Tank
+    z = np.where(mask_left_tank, z_tank, z)
+
+    # C. Apply the Trapezoidal Banks (Ramping from z_center up to z_edges)
+    bank_width = 0.34
+    flat_y_max = 1.46  # 1.8 - 0.34
+    y_abs = np.abs(Y)
+    
+    bank_slope = np.where(
+        y_abs > flat_y_max, 
+        z_center + (z_edges - z_center) * ((y_abs - flat_y_max) / bank_width), 
+        z
+    )
+    
+    mask_trapezoidal = mask_mid_channel | mask_right_channel
+    z = np.where(mask_trapezoidal & (y_abs > flat_y_max), bank_slope, z)
+
+    # D. The Solid Concrete Sill
+    sill_thickness = 0.05 
+    x_sed_end = 9.00
+    mask_sill = (X > x_sed_end) & (X <= x_sed_end + sill_thickness) & mask_right_channel
+    
+    # Sill rises to perfectly match the target sediment surface
+    z = np.where(mask_sill, np.maximum(z, target_sed_elevation), z)
+
+    # ==========================================
+    # 4. ERODIBLE SEDIMENT BED (z_b)
+    # ==========================================
     z_b = np.zeros_like(X)
     
-    x_sed_start = -1.5
-    x_sed_end = 9.0
-    ramp_up_len = 1.5 / 4.0
-    ramp_down_len = 1.5 / 6.0
-    max_sed_height = 0.085
+    x_sed_start = -1.00  
+    ramp_up_len = 0.20   
 
-    # Base sediment mask
     mask_sediment = (X >= x_sed_start) & (X <= x_sed_end) & valid_domain
     
-    # Apply ramp up
+    # Create the target surface elevation array
+    target_z = np.copy(z) # Default is bare concrete
+    
+    # Target ramp up
     mask_ramp_up = mask_sediment & (X < x_sed_start + ramp_up_len)
-    z_b[mask_ramp_up] = max_sed_height * (X[mask_ramp_up] - x_sed_start) / ramp_up_len
+    progress = (X - x_sed_start) / ramp_up_len
     
-    # Apply plateau
-    mask_plateau = mask_sediment & (X >= x_sed_start + ramp_up_len) & (X <= x_sed_end - ramp_down_len)
-    z_b[mask_plateau] = max_sed_height
+    target_z = np.where(
+        mask_ramp_up,
+        z + (target_sed_elevation - z) * progress,
+        target_z
+    )
     
-    # Apply ramp down
-    mask_ramp_down = mask_sediment & (X > x_sed_end - ramp_down_len)
-    z_b[mask_ramp_down] = max_sed_height * (x_sed_end - X[mask_ramp_down]) / ramp_down_len
+    # Target plateau
+    mask_plateau = mask_sediment & (X >= x_sed_start + ramp_up_len)
+    target_z[mask_plateau] = target_sed_elevation
+
+    # Actual sediment thickness is the Target Surface minus the Concrete Surface
+    z_b = np.where(mask_sediment, np.maximum(0.0, target_z - z), 0.0)
 
     # ==========================================
-    # 4. WATER DEPTH & HYDRODYNAMICS
+    # 5. WATER DEPTH & HYDRODYNAMICS
     # ==========================================
-    # Flat Water Surface Elevation (WSE) at 0.57m relative to main channel bed
-    WSE = 0.57
-    h = WSE - z - z_b
-    h = np.where(X <= 0.0, h, 0.0)
+    WSE_absolute = 0.47
+        
+    h = WSE_absolute - z - z_b
+    h = np.where((X <= 0.0) & (h > 0), h, 0.0) 
     
-    # Initialize velocities and roughness
     u = np.zeros_like(h)
     v = np.zeros_like(h)
-    n = np.full_like(h, 0.0165)
+    n = np.full_like(h, 0.01)
 
-    # Apply nanmask to cut out the walls
+    # Apply masks
     h[nanmask] = np.nan
     u[nanmask] = np.nan
     v[nanmask] = np.nan
@@ -105,7 +141,7 @@ def erodible_channel():
     n[nanmask] = np.nan
 
     # ==========================================
-    # 5. EXPORT
+    # 6. EXPORT
     # ==========================================
     ds = xr.Dataset(
         {
@@ -118,16 +154,18 @@ def erodible_channel():
         },
         coords={"x": x, "y": y},
         attrs={
-            "description": "Domain initialized with true origin at junction",
+            "description": "Absolute Datum (edges=0.0, center=-0.155) with excavated chamfers",
             "x_range": f"[{x_left_tank}, {x_right_end}]",
             "y_range": f"[{y_tank_min}, {y_tank_max}]",
         },
     )
 
     ds.to_netcdf("erodible_channel.nc", format="NETCDF3_64BIT")
+    print("Exported erodible_channel.nc successfully!")
+    data_ = xr.open_dataset("erodible_channel.nc")
 
     # Plot to verify
-    for var_name, data, cmap in [("h", h, "Blues"), ("z_b", z_b, "YlOrBr"), ("z", z, "gray")]:
+    for var_name, data, cmap in [("h", data_.h, "Blues"), ("z_b", data_.z_b, "YlOrBr"), ("z", data_.z, "gray")]:
         plt.figure(figsize=(12, 4))
         plt.imshow(data, cmap=cmap, extent=[x.min(), x.max(), y.min(), y.max()], origin='upper')
         plt.colorbar(label=var_name)
@@ -136,7 +174,7 @@ def erodible_channel():
         plt.title(f"{var_name} Profile")
         plt.xlabel("x (m)")
         plt.ylabel("y (m)")
-        plt.savefig(f"{var_name}.png", bbox_inches='tight')
+        plt.savefig(f"{var_name}.png", bbox_inches='tight', dpi=250)
         plt.close()
 
 if __name__ == "__main__":
