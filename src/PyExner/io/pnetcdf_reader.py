@@ -194,7 +194,7 @@ class PnetCDFStateIO():
         count = [local_Nx]
 
         var_x.put_var_all(
-            self.infile.variables["x"][mesh.x_offset : mesh.x_offset + local_Nx],
+            np.array(self.infile.variables["x"][mesh.x_offset : mesh.x_offset + local_Nx], dtype=np.float64),
             start = start,
             count = count
         )
@@ -203,7 +203,7 @@ class PnetCDFStateIO():
         count = [local_Ny]
 
         var_y.put_var_all(
-            self.infile.variables["y"][mesh.y_offset : mesh.y_offset + local_Ny],
+            np.array(self.infile.variables["y"][mesh.y_offset : mesh.y_offset + local_Ny], dtype=np.float64),
             start = start, 
             count = count    
         )

@@ -418,6 +418,7 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
 
     # Topographic source term (pressure gradient due to bed slope)
     # This is a specific well-balanced formulation.
+    #thrust = -g * htilde * dz
     thrust_a = -g * htilde * dz
 
     # Alternative thrust calculation for specific dry/wet conditions
@@ -438,6 +439,8 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     
     both_dry = (hi < DRY_TOL) & (hj < DRY_TOL)
     thrust = jnp.where(both_dry, 0.0, thrust)
+
+    # friction
 
     ntilde = 0.5*(ni+nj)
     sf = (ntilde**2*jnp.sqrt(utilde**2+vtilde**2)*utilde)/(jnp.maximum(DRY_TOL, htilde**(4/3)))

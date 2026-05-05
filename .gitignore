@@ -210,4 +210,4 @@ __marimo__/
 *.out
 *.nc
 tests/*/*/*.png
-
+tests/*/*/*/*.png

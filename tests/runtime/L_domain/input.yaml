@@ -6,7 +6,7 @@ integrator: Forward Euler
 parNx: 1
 parNy: 1
 input_file: L_domain.nc
-output_file: L_domain_out_test.nc
+output_file: L_domain_out.nc
 
 erosion:
   grass_factor: MPM

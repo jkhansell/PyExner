@@ -81,7 +81,7 @@ def step_fn_roeexner(state: RoeExnerState, time: float, dt: float, mask, config:
 
     # Step 3: Apply boundary conditions   
     state = config.boundaries.apply(state, time)
-    
+
     # Step 4: Now halo exchange (sends corrected values to neighbors)
     h = config.halo_exchange(state.h)
     hu = config.halo_exchange(state.hu)
@@ -101,11 +101,11 @@ def step_fn_roeexner(state: RoeExnerState, time: float, dt: float, mask, config:
     z_b = config.halo_exchange(state.z_b)
     state = state.replace(z_b=z_b)
 
+    state = config.boundaries.apply(state, time)
+
     n_b = config.compute_n(state.n, state.z_b, state.seds)
     n_b = config.halo_exchange(n_b)
     state = state.replace(n_b=n_b)
-
-    state = config.boundaries.apply(state, time)
 
     return state
 
