@@ -311,8 +311,8 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     hi, hui, hvi, z_bi, zi, ni = si
     hj, huj, hvj, z_bj, zj, nj = sj
 
-    hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL)
-    hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL)
+    hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL*0.01)
+    hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL*0.01)
 
     sqrt_i = jnp.sqrt(hi)
     sqrt_j = jnp.sqrt(hj)
@@ -408,8 +408,8 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     
     # handle sediment bed 
 
-    z_bi = jnp.where(z_bi > SED_TOL, z_bi, SED_TOL)
-    z_bj = jnp.where(z_bj > SED_TOL, z_bj, SED_TOL)
+    z_bi = jnp.where(z_bi > SED_TOL, z_bi, SED_TOL*0.01)
+    z_bj = jnp.where(z_bj > SED_TOL, z_bj, SED_TOL*0.01)
 
     dz = (zj+z_bj) - (zi+z_bi)
     di = hi + (zi+z_bi)
@@ -607,11 +607,11 @@ def exner_solver(si, sj, nx, ny, dx):
     hi, hui, hvi, z_bi, zi, gi = si
     hj, huj, hvj, z_bj, zj, gj = sj
 
-    hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL)
-    hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL)
+    hi = jnp.where(hi > DRY_TOL, hi, DRY_TOL*0.01)
+    hj = jnp.where(hj > DRY_TOL, hj, DRY_TOL*0.01)
 
-    z_bi = jnp.where(z_bi > SED_TOL, z_bi, SED_TOL)
-    z_bj = jnp.where(z_bj > SED_TOL, z_bj, SED_TOL)
+    z_bi = jnp.where(z_bi > SED_TOL, z_bi, SED_TOL*0.01)
+    z_bj = jnp.where(z_bj > SED_TOL, z_bj, SED_TOL*0.01)
     
     sqrt_i = jnp.sqrt(hi)
     sqrt_j = jnp.sqrt(hj)

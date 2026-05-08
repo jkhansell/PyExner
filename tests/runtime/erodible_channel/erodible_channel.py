@@ -35,34 +35,22 @@ def erodible_channel():
     mask_right_channel = (X > x_contract_end) & (X <= x_right_end) & (Y >= y_channel_min) & (Y <= y_channel_max)
 
     valid_domain = mask_left_tank | mask_mid_channel | mask_contraction | mask_right_channel
-
-    # Add 45-degree chamfers
-    c_len = 0.1  
-    cut_TL = (X > -0.5) & (X <= -0.5 + c_len) & (Y > 0.5) & (Y <= 0.5 + c_len) & ((Y - 0.5) <= -(X - (-0.5 + c_len)))
-    cut_BL = (X > -0.5) & (X <= -0.5 + c_len) & (Y < -0.5) & (Y >= -0.5 - c_len) & ((-0.5 - Y) <= -(X - (-0.5 + c_len)))
-    cut_TR = (X < 0.5) & (X >= 0.5 - c_len) & (Y > 0.5) & (Y <= 0.5 + c_len) & ((Y - 0.5) <= (X - (0.5 - c_len)))
-    cut_BR = (X < 0.5) & (X >= 0.5 - c_len) & (Y < -0.5) & (Y >= -0.5 - c_len) & ((-0.5 - Y) <= (X - (0.5 - c_len)))
-
-    # Group chamfers to easily manage their Z elevation
-    mask_chamfers = cut_TL | cut_BL | cut_TR | cut_BR
-    
-    valid_domain = valid_domain | mask_chamfers
     nanmask = ~valid_domain
 
     # ==========================================
     # 3. TOPOGRAPHY (z) - FIXED CONCRETE GEOMETRY
     # ==========================================
     # Explicit Datum Elevations
-    z_edges = 0.0          # Absolute reference
-    z_center = -0.155      # Trench depth
-    z_tank = - 0.10 # Left tank is 0.10m deeper than channel
+    z_edges = 0.155          # Absolute reference
+    z_center = 0.0      # Trench depth
+    z_tank = -0.10 # Left tank is 0.10m deeper than channel
     target_sed_elevation = 0.085 
     
     # Initialize everything to the edge elevation
     z = np.full_like(X, z_edges)
 
-    # A. Excavate the flat channel bottoms (Main, Right, Contraction, AND Chamfers)
-    mask_main_flow = mask_mid_channel | mask_contraction | mask_right_channel | mask_chamfers
+    # A. Excavate the flat channel bottoms
+    mask_main_flow = mask_mid_channel | mask_contraction | mask_right_channel
     z = np.where(mask_main_flow, z_center, z)
 
     # B. Excavate the Tank
@@ -123,8 +111,8 @@ def erodible_channel():
     # ==========================================
     # 5. WATER DEPTH & HYDRODYNAMICS
     # ==========================================
-    WSE_absolute = 0.47
-        
+    WSE_absolute = 0.47 
+    
     h = WSE_absolute - z - z_b
     h = np.where((X <= 0.0) & (h > 0), h, 0.0) 
     
@@ -154,7 +142,7 @@ def erodible_channel():
         },
         coords={"x": x, "y": y},
         attrs={
-            "description": "Absolute Datum (edges=0.0, center=-0.155) with excavated chamfers",
+            "description": "Absolute Datum, sharp corners restored",
             "x_range": f"[{x_left_tank}, {x_right_end}]",
             "y_range": f"[{y_tank_min}, {y_tank_max}]",
         },
@@ -162,10 +150,11 @@ def erodible_channel():
 
     ds.to_netcdf("erodible_channel.nc", format="NETCDF3_64BIT")
     print("Exported erodible_channel.nc successfully!")
+
     data_ = xr.open_dataset("erodible_channel.nc")
 
     # Plot to verify
-    for var_name, data, cmap in [("h", data_.h, "Blues"), ("z_b", data_.z_b, "YlOrBr"), ("z", data_.z, "gray")]:
+    for var_name, data, cmap in [("h", data_.h, "Blues"), ("z_b", data_.z_b, "YlOrBr"), ("z", data_.z, "gray"), ("n", data_.n, "gray")]:
         plt.figure(figsize=(12, 4))
         plt.imshow(data, cmap=cmap, extent=[x.min(), x.max(), y.min(), y.max()], origin='upper')
         plt.colorbar(label=var_name)

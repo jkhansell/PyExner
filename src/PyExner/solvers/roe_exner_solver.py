@@ -39,6 +39,7 @@ def config_fn_roeexner(state, mpi_handler, boundaries, dx, params):
     halo_exchange = make_halo_exchange(mpi_handler)
     
     is_constant = not isinstance(params["erosion"]["grass_factor"], str)
+
     compute_G = compute_G_factory(is_constant)
     compute_n = compute_n_factory(is_constant)
 

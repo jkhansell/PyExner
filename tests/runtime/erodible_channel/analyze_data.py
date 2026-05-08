@@ -75,7 +75,7 @@ def plot_line_profiles():
         # Plot a line for each specific timestep
         # Extract Z values along the entire Y axis for the fixed X index
         # shape will be (len(dataset.y))
-        profile = z.isel(y=iy).sel(x=slice(1.76 + 10.33 + 1.0, 1.76 + 10.33 + 1.0 + 8))
+        profile = z_b.isel(y=iy).sel(x=slice(0.5, 9.0))
 
         actual_time = time_array[-1]
         print(actual_time)
@@ -108,7 +108,7 @@ def plot_line_profiles():
             df = pd.read_csv(os.path.join("experimental_results", file), skipinitialspace=True).sort_values("x")
             ax.plot(df.iloc[:,0], df.iloc[:,1], label=f"{file[3:-4]}", c=colors[j % len(colors)], zorder=2)
 
-        ax.plot(profile.x - (1.76 + 10.33 + 1.0), profile.values, label=f"PyExner", zorder=3, color="blue")
+        ax.plot(profile.x, profile.values, label=f"PyExner", zorder=3, color="blue")
 
         ax.set_title(f"Cross-section at {name} (y={lines[name]})", fontweight='bold')
         ax.grid(True, alpha=0.3)
@@ -134,8 +134,8 @@ def plot_time_series():
     for name, coords in points.items():
         px, py = coords
 
-        px_target = 1.76 + 10.33 + 1.0 + px  
-        py_target = 9.2/2 + py 
+        px_target = px  
+        py_target = py 
 
         # Find the index of the closest value
         idx_x = np.argmin(np.abs(data.x.values - px_target))
@@ -299,11 +299,80 @@ def plot_images():
         fig.savefig(f"dambreak/dambreak_{i}.png", dpi=200)
         plt.close()
 
+def plot_3d_animation(elev=30, azim=-60):
+    os.makedirs("3d_frames", exist_ok=True)
+    try:
+        import imageio.v2 as imageio
+    except ImportError:
+        try:
+            import imageio
+        except ImportError:
+            imageio = None
+
+    x_sl = slice(-2.1, 11.9)
+    y_sl = slice(1.8, -1.8)
+
+    # Pre-compute X, Y meshgrid
+    h_sample = data.h[0].sel(x=x_sl, y=y_sl)
+    X, Y = np.meshgrid(h_sample.x, h_sample.y)
+    
+    frames = []
+
+    for i, idt in enumerate(time_array):
+        print(f"3D Plot Timestep: {i}")
+
+        h = data.h[i].sel(x=x_sl, y=y_sl).values
+        z = data.z[i].sel(x=x_sl, y=y_sl).values
+        z_b = data.z_b[i].sel(x=x_sl, y=y_sl).values
+
+        water_surface = h + z_b + z
+        bed_elevation = z_b + z
+
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+
+        # Plot bed elevation
+        ax.plot_surface(X, Y, bed_elevation, cmap='copper', alpha=1.0, edgecolor='none', rstride=1, cstride=1)
+        
+        # Mask water surface where water depth is very low (e.g., < 1mm)
+        water_masked = np.ma.masked_where(h < 1e-3, water_surface)
+        ax.plot_surface(X, Y, water_masked, cmap='Blues', alpha=0.5, edgecolor='none', rstride=1, cstride=1)
+
+        ax.set_title(f"Time: {idt} s")
+        ax.set_xlabel('X [m]')
+        ax.set_ylabel('Y [m]')
+        ax.set_zlabel('Elevation [m]')
+        
+        ax.set_zlim(0.0, 0.6)
+        
+        # Adjust the viewing angle
+        ax.view_init(elev=elev, azim=azim)
+        
+        plt.tight_layout()
+        frame_name = f"3d_frames/frame_{i:04d}.png"
+        plt.savefig(frame_name, dpi=150)
+        plt.close(fig)
+        
+        if imageio is not None:
+            frames.append(imageio.imread(frame_name))
+
+    if imageio is not None:
+        try:
+            imageio.mimsave("3d_animation.gif", frames, fps=4)
+            print("Saved 3d_animation.gif")
+        except Exception as e:
+            print(f"Failed to save gif: {e}")
+    else:
+        print("Saved 3D frames in '3d_frames'. Install imageio to generate GIF automatically.")
+
+
 
 if __name__ == "__main__":
     plot_line_profiles()
     #print("Lines plotted")
     plot_time_series()
     #print("Time series plotted")
-    plot_images()
-    print("Images plotted")
+    #plot_images()
+    #print("Images plotted")
+    plot_3d_animation(elev=30, azim=-60)
+    print("3D animation plotted")
