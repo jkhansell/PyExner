@@ -23,8 +23,8 @@ FLUX_TOL = 1e-12
 TIMESTEP_TOL = 5e-7
 
 # Tolerance for dry domains
-DRY_TOL = 1e-3
-SED_TOL = 1e-4
+DRY_TOL = 1e-4
+SED_TOL = 1e-5
 VEL_TOL = 1e-6
 
 # Tolerance for slow velocities

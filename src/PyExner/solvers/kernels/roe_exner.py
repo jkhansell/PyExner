@@ -707,7 +707,7 @@ def make_halo_exchange(mpi_handler):
     neighbors = mpi_handler.neighbors
     comm = mpi_handler.cart_comm
 
-    #@jax.jit
+    @jax.jit
     def halo_exchange(arr):
         send_order = (
             "west",
@@ -716,7 +716,7 @@ def make_halo_exchange(mpi_handler):
             "south",
         )
 
-        # start receiving east, go clockwise
+        # receive from opposite side
         recv_order = (
             "east",
             "south",
@@ -724,19 +724,43 @@ def make_halo_exchange(mpi_handler):
             "north",
         )
 
-        overlap_slices_send = dict(
-            south=(1, slice(None)),
-            west=(slice(None), 1),
-            north=(-2, slice(None)),
-            east=(slice(None), -2),
-        )
+        # =====================================================
+        # SEND slices
+        # =====================================================
 
-        overlap_slices_recv = dict(
-            south=(0, slice(None)),
-            west=(slice(None), 0),
-            north=(-1, slice(None)),
-            east=(slice(None), -1),
-        )
+        overlap_slices_send = {
+
+            # send west interior
+            "west": (slice(1, -1), 1),
+
+            # send north interior
+            "north": (1, slice(1, -1)),
+
+            # send east interior
+            "east": (slice(1, -1), -2),
+
+            # send south interior
+            "south": (-2, slice(1, -1)),
+        }
+
+        # =====================================================
+        # RECEIVE ghost slices
+        # =====================================================
+
+        overlap_slices_recv = {
+
+            # receive from east neighbor
+            "east": (slice(1, -1), -1),
+
+            # receive from south neighbor
+            "south": (-1, slice(1, -1)),
+
+            # receive from west neighbor
+            "west": (slice(1, -1), 0),
+
+            # receive from north neighbor
+            "north": (0, slice(1, -1)),
+        }
 
         for send_dir, recv_dir in zip(send_order, recv_order):
             send_proc = neighbors[send_dir]
@@ -751,20 +775,15 @@ def make_halo_exchange(mpi_handler):
             send_idx = overlap_slices_send[send_dir]
             send_arr = arr[send_idx]
 
-            if send_proc is MPI.PROC_NULL:
-                recv_arr = mpi4jax.recv(recv_arr, source=recv_proc, comm=comm)
-                arr = arr.at[recv_idx].set(recv_arr)
-            elif recv_proc is MPI.PROC_NULL:
-                mpi4jax.send(send_arr, dest=send_proc, comm=comm)
-            else:
-                recv_arr = mpi4jax.sendrecv(
-                    send_arr,
-                    recv_arr,
-                    source=recv_proc,
-                    dest=send_proc,
-                    comm=comm,
-                )
-                arr = arr.at[recv_idx].set(recv_arr)
+            recv_arr = mpi4jax.sendrecv(
+                send_arr,
+                recv_arr,
+                source=recv_proc,
+                dest=send_proc,
+                comm=comm,
+            )
+            
+            arr = arr.at[recv_idx].set(recv_arr)
             
         return arr
 

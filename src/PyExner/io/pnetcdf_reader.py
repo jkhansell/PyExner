@@ -11,10 +11,16 @@ from PyExner.domain.mesh import Mesh2D
 
 from dataclasses import fields
 
-def extend_with_ghosts(arr, dh):
+def extend_with_ghosts_x(arr, dh):
     left = arr[0] - dh
     right = arr[-1] + dh
     return np.concatenate([np.array([left]), arr, np.array([right])])
+
+def extend_with_ghosts_y(arr, dh):
+    top = arr[0] + dh
+    bottom = arr[-1] - dh
+    return np.concatenate([np.array([top]), arr, np.array([bottom])])
+
 
 class PnetCDFStateIO():
     def __init__(self, in_file_path: str, out_file_path: str, mpihandler: Parallel):
@@ -73,13 +79,13 @@ class PnetCDFStateIO():
         
         dh = round(float((self.local_x[1:] - self.local_x[:-1])[0]),5)
 
-        if x_parts != 1:
-            self.local_x = extend_with_ghosts(self.local_x, dh)
-            local_Nx += 2
+        if x_parts*y_parts != 1:
+            
+            self.local_x = extend_with_ghosts_x(self.local_x, dh)
+            self.local_y = extend_with_ghosts_y(self.local_y, dh)
 
-        if y_parts != 1:
-            self.local_y = extend_with_ghosts(self.local_y, dh)
             local_Ny += 2
+            local_Nx += 2
 
         local_x = jnp.array(self.local_x) + dh/2
         local_y = jnp.array(self.local_y) - dh/2
@@ -106,12 +112,12 @@ class PnetCDFStateIO():
         """Populate the fields of the given state instance in-place."""
         new_values = {}
         y_parts, x_parts = self.mpihandler.dims
-        has_x_halo = x_parts != 1
-        has_y_halo = y_parts != 1
+
+        has_halo = x_parts*y_parts != 1
 
         # Remove halos from dataset input if they are expected to be exchanged via MPI
-        local_Nx = mesh.local_Nx - 2 if has_x_halo else mesh.local_Nx
-        local_Ny = mesh.local_Ny - 2 if has_y_halo else mesh.local_Ny
+        local_Nx = mesh.local_Nx - 2 if has_halo else mesh.local_Nx
+        local_Ny = mesh.local_Ny - 2 if has_halo else mesh.local_Ny
 
         for f in fields(state_instance):
             name = f.name
@@ -163,10 +169,8 @@ class PnetCDFStateIO():
             ]).astype(jnp.float32)
 
             # Reintroduce halo padding for in-process ghost cells
-            if has_x_halo:
+            if has_halo:
                 data = jnp.pad(data, ((0, 0), (1, 1)), mode="edge")
-
-            if has_y_halo:
                 data = jnp.pad(data, ((1, 1), (0, 0)), mode="edge")
 
             new_values[name] = data
@@ -211,18 +215,19 @@ class PnetCDFStateIO():
         # close input file
         self.infile.close()
 
+        print(f"[mpi_utils] State read from {self.in_file_path}")
+
         return state_instance.replace(**new_values)
 
     def write_state(self, state_instance, mesh, mask):
 
         y_parts, x_parts = self.mpihandler.dims
 
-        has_x_halo = x_parts != 1
-        has_y_halo = y_parts != 1
+        has_halo = x_parts*y_parts != 1
 
         # Remove halos from dataset input if they are expected to be exchanged via MPI
-        local_Nx = mesh.local_Nx - 2 if has_x_halo else mesh.local_Nx
-        local_Ny = mesh.local_Ny - 2 if has_y_halo else mesh.local_Ny
+        local_Nx = mesh.local_Nx - 2 if has_halo else mesh.local_Nx
+        local_Ny = mesh.local_Ny - 2 if has_halo else mesh.local_Ny
 
         start = [self.numOut, mesh.y_offset, mesh.x_offset]
         count = [1, local_Ny, local_Nx]
@@ -232,8 +237,19 @@ class PnetCDFStateIO():
             if f.name == "seds":
                 continue
             
-            arr = jnp.where(mask, jnp.nan, getattr(state, f.name))
-            arr = np.ascontiguousarray(jnp.expand_dims(arr, 0))
+            arr = getattr(state, f.name)
+
+            arr = jnp.where(mask, jnp.nan, arr)
+
+            if has_halo:
+                arr = arr[1:-1, 1:-1]
+
+            arr = jnp.expand_dims(arr, 0)
+
+            # FORCE HOST MATERIALIZATION
+            arr = jax.device_get(arr)
+
+            arr = np.ascontiguousarray(arr.astype(np.float32))
 
             self.vars[f.name].put_var_all(arr.astype(jnp.float32), start=start, count=count)
         

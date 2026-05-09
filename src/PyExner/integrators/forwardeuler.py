@@ -75,14 +75,18 @@ def run_fn_forwardeuler(state: BaseState, config: IntegratorConfig, io, mesh, b_
         )
 
         simstate = jax.lax.while_loop(cond_fn, body_fn, simstate)
-        
+
+
         time = simstate.time
         state = simstate.state
         
         dt = config.solver_bundle.compute_dt_fn(state, config.cfl, mask, config.solver_config)
+        
+        io.write_state(state, mesh, mask[0])
 
         next_out_time = (int(time / config.out_freq) + 1) * config.out_freq
         next_target = min(next_out_time, config.end_time)
+
 
         if time + dt >= next_target - TIMESTEP_TOL:
             dt = next_target - time

@@ -59,7 +59,7 @@ def compute_reflective_indices(mask: jnp.ndarray, normal: jnp.ndarray):
     interior_cells = (boundary_cells + shift).astype(jnp.int32)
 
     Ny, Nx = mask.shape
-    interior_cells = jnp.clip(interior_cells, a_min=0, a_max=jnp.array([Ny - 1, Nx - 1]))
+    interior_cells = jnp.clip(interior_cells, min=0, max=jnp.array([Ny - 1, Nx - 1]))
 
     by, bx = boundary_cells[:, 0], boundary_cells[:, 1]
     iy, ix = interior_cells[:, 0], interior_cells[:, 1]
@@ -165,6 +165,10 @@ class BoundaryManager:
                 traceback.print_exc()
                 raise
         
+        plt.imshow(masks.any(axis=0))
+        plt.savefig(f"mask_rank{MPI.COMM_WORLD.Get_rank()}.png")
+        plt.close()
+
     @partial(jax.jit, static_argnums=(0,))
     def apply(self, state, time):
         for handler in self.boundary_handlers:

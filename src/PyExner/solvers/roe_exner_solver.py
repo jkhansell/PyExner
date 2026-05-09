@@ -24,12 +24,10 @@ def get_mask(state, dims, b_mask):
     y_parts, x_parts = dims
 
     if y_parts != 1:
-        jax.debug.print("here1")
         mask = mask.at[0, :].set(True)
         mask = mask.at[-1, :].set(True)
     
     if x_parts != 1:
-        jax.debug.print("here1")
         mask = mask.at[:, 0].set(True)
         mask = mask.at[:, -1].set(True)
 
@@ -71,23 +69,25 @@ def init_fn_roeexner(state: RoeExnerState, mask, config: SolverConfig) -> RoeExn
 
     state = state.replace(G=G)
     state = config.boundaries.apply(state, 0.0)
+
     return state 
 
+@jax.jit(static_argnums=4)
 def step_fn_roeexner(state: RoeExnerState, time: float, dt: float, mask, config: SolverConfig) -> RoeExnerState:    
     # Step 1: Solve hydrodynamics
     state = roe_solve_2D(state, dt, config.dx, mask)
 
     # Step 2: Momentum corrections
     state = momentum_corrections(state, mask)
-
+    
     # Step 3: Apply boundary conditions   
-    state = config.boundaries.apply(state, time)
+    state = config.boundaries.apply(state, time)  
 
     # Step 4: Now halo exchange (sends corrected values to neighbors)
     h = config.halo_exchange(state.h)
     hu = config.halo_exchange(state.hu)
     hv = config.halo_exchange(state.hv)
-    
+  
     state = state.replace(h=h, hu=hu, hv=hv)
 
     # Step 5: Compute morphodynamics source term
@@ -105,7 +105,7 @@ def step_fn_roeexner(state: RoeExnerState, time: float, dt: float, mask, config:
     state = config.boundaries.apply(state, time)
 
     n_b = config.compute_n(state.n, state.z_b, state.seds)
-    n_b = config.halo_exchange(n_b)
+    n_b = config.halo_exchange(state.n_b)
     state = state.replace(n_b=n_b)
 
     return state
