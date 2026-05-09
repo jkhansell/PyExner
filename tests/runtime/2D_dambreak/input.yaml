@@ -2,7 +2,7 @@ end_time: 1
 out_freq: 0.1
 io_freq: 0.1
 cfl: 0.5
-flux_scheme: Roe
+flux_scheme: Roe Exner
 integrator: Forward Euler
 parNx: 1
 parNy: 1
@@ -11,7 +11,7 @@ initial_conditions: input.nc
 boundaries:
 
   outlet1:
-    type: Transmissive
+    type: Reflective
     polygon:
       - [-2.05, -2.05]
       - [-1.95, -2.05]
@@ -21,7 +21,7 @@ boundaries:
     normal: [-1.0, 0.0]
 
   outlet2:
-    type: Transmissive
+    type: Reflective
     polygon:
       - [ 1.95, -2.05]
       - [ 2.05, -2.05]
@@ -31,7 +31,7 @@ boundaries:
     normal: [1.0, 0.0]
 
   outlet3:
-    type: Transmissive
+    type: Reflective
     polygon:
       - [-2.05, -2.05]
       - [ 2.05, -2.05]
@@ -41,7 +41,7 @@ boundaries:
     normal: [0.0, -1.0]
 
   outlet4:
-    type: Transmissive
+    type: Reflective
     polygon:
       - [-2.05,  1.95]
       - [ 2.05,  1.95]

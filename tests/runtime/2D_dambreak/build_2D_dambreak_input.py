@@ -2,15 +2,16 @@ import sys
 import xarray as xr
 import numpy as np
 
-def symmetrical_dambreak_exner_2D(L, dh):
-    x_range = [-L, L]
-    y_range = [-L, L]
+def symmetrical_dambreak_exner_2D(Lx, Ly, dh):
+    x_range = [-Lx, Lx]
+    y_range = [-Ly, Ly]
 
     x = np.arange(x_range[0], x_range[1]+dh, dh)
     y = np.arange(y_range[0], y_range[1]+dh, dh)
     X, Y = np.meshgrid(x, y, indexing="xy")
 
-    mask = X**2 + Y**2 <= (L/4)**2
+    R = min(Lx, Ly) / 4
+    mask = X**2 + Y**2 <= R**2
 
     h = np.where(mask, 1.0, 0.2)
     n = np.zeros_like(h)
@@ -41,7 +42,16 @@ def symmetrical_dambreak_exner_2D(L, dh):
 
 
 if __name__ == "__main__":
-    L = float(sys.argv[1])
-    dh = float(sys.argv[2])
+    if len(sys.argv) == 3:
+        Lx = float(sys.argv[1])
+        Ly = Lx
+        dh = float(sys.argv[2])
+    elif len(sys.argv) == 4:
+        Lx = float(sys.argv[1])
+        Ly = float(sys.argv[2])
+        dh = float(sys.argv[3])
+    else:
+        print("Usage: python build_2D_dambreak_input.py Lx [Ly] dh")
+        sys.exit(1)
 
-    symmetrical_dambreak_exner_2D(L, dh)
+    symmetrical_dambreak_exner_2D(Lx, Ly, dh)
