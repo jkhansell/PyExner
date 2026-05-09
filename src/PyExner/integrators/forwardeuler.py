@@ -53,7 +53,7 @@ def run_fn_forwardeuler(state: BaseState, config: IntegratorConfig, io, mesh, b_
     dt = 0.0
     
     # Make masks and body functions
-    mask = config.solver_bundle.mask_fn(state, config.solver_config.mpi_handler.dims, b_mask) 
+    mask = config.solver_bundle.mask_fn(state, config.solver_config.mpi_handler, b_mask) 
     body_fn = make_body_fn(config.solver_bundle, mask, config.solver_config)
     state = config.solver_bundle.init_fn(state, mask, config.solver_config)
     

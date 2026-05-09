@@ -18,17 +18,20 @@ from PyExner.solvers.kernels.roe_exner import (
 )
 from PyExner.solvers.registry import SolverConfig, SolverBundle, register_solver_bundle
 
-def get_mask(state, dims, b_mask):
+def get_mask(state, mpi_handler, b_mask):
     mask = jnp.isnan(state.z)
+    
+    coords = mpi_handler.coords
+    dims = mpi_handler.dims
 
-    y_parts, x_parts = dims
-
-    if y_parts != 1:
+    if coords[0] == 0:
         mask = mask.at[0, :].set(True)
+    if coords[0] == dims[0] - 1:
         mask = mask.at[-1, :].set(True)
     
-    if x_parts != 1:
+    if coords[1] == 0:
         mask = mask.at[:, 0].set(True)
+    if coords[1] == dims[1] - 1:
         mask = mask.at[:, -1].set(True)
 
     return jnp.stack([mask, b_mask], axis=0)

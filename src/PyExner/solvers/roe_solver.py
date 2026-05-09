@@ -11,7 +11,7 @@ from PyExner.state.roe_state import RoeState
 from PyExner.solvers.kernels.roe import compute_dt, roe_solve_2D, make_halo_exchange
 from PyExner.solvers.registry import SolverConfig, SolverBundle, register_solver_bundle
 
-def get_mask(state):
+def get_mask(state, *args, **kwargs):
     mask = jnp.zeros_like(state.h)
     mask = mask.at[1:-1, 1:-1].set(1)
     return mask
