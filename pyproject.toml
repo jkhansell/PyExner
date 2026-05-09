@@ -22,15 +22,21 @@ dev = [
     "black",
     "mypy",
 ]
+
 cpu = ["jax[cpu]>=0.4.20"]
+
 cuda12 = ["jax[cuda12]>=0.5.0"]
+cuda13 = ["jax[cuda13]>=0.5.0"]
 
 [build-system]
+
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
+
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
+
 where = ["src"]
