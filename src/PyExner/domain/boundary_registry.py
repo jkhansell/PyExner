@@ -165,10 +165,6 @@ class BoundaryManager:
                 traceback.print_exc()
                 raise
         
-        plt.imshow(masks.any(axis=0))
-        plt.savefig(f"mask_rank{MPI.COMM_WORLD.Get_rank()}.png")
-        plt.close()
-
     @partial(jax.jit, static_argnums=(0,))
     def apply(self, state, time):
         for handler in self.boundary_handlers:

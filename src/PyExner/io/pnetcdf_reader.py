@@ -125,9 +125,9 @@ class PnetCDFStateIO():
             if name not in self.infile.variables:
                 if name == "G":
                     if isinstance(config["erosion"]["grass_factor"], str):
-                        new_values[name] = jnp.zeros((local_Ny, local_Nx))
+                        new_values[name] = jnp.zeros((mesh.local_Ny, mesh.local_Nx))
                     else:
-                        new_values[name] = config["erosion"]["grass_factor"]*jnp.ones((local_Ny, local_Nx))
+                        new_values[name] = config["erosion"]["grass_factor"]*jnp.ones((mesh.local_Ny, mesh.local_Nx))
                     continue    
 
                 if name == "n_b": 

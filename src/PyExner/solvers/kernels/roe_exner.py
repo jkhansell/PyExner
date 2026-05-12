@@ -11,6 +11,7 @@ from PyExner.utils.constants import g, DRY_TOL, VEL_TOL, SED_TOL
 
 import matplotlib.pyplot as plt
 
+@jax.jit
 def momentum_corrections(state: RoeExnerState, mask):
     h = state.h
     z = state.z + state.z_b
@@ -59,6 +60,7 @@ def momentum_corrections(state: RoeExnerState, mask):
         hv = hv_new, 
     )
 
+@jax.jit
 def compute_n(n, z_b, seds):
    
     frac = seds[0][:, None, None]
@@ -79,6 +81,7 @@ def compute_n_factory(is_constant: bool):
             return compute_n(n, z_b, seds)
         return _compute_n
 
+@jax.jit
 def compute_G(h, hu, hv, seds, mask):
 
     h = jnp.maximum(h, DRY_TOL)
@@ -156,6 +159,7 @@ def _get_approx_lambda(_lambda, atilde, utilde, ctilde):
 
     return lambda_
 
+@jax.jit
 def _get_lambda(utilde, atilde, ctilde):
     """
     Solves cubic polynomial 
@@ -199,6 +203,7 @@ def _get_lambda(utilde, atilde, ctilde):
 
     return lambda_min, lambda_max
 
+@jax.jit
 def compute_dt(si, sj, nx, ny, dx):
     hi, hui, hvi, zi, gi = si
     hj, huj, hvj, zj, gj = sj
@@ -250,7 +255,7 @@ def compute_dt(si, sj, nx, ny, dx):
 
     return dt
 
-#@jax.jit
+@jax.jit
 def compute_dt_2D(state: RoeExnerState, dx, mask):
     h, hu, hv, z, G = state.h, state.hu, state.hv, state.z, state.G
 
@@ -305,7 +310,6 @@ def compute_dt_2D(state: RoeExnerState, dx, mask):
 
     return dt
 
-#@jax.jit
 @jax.jit
 def roe_solver(si, sj, nx: float, ny: float, dx: float):
     hi, hui, hvi, z_bi, zi, ni = si
@@ -519,6 +523,7 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
 
     return upwP, upwM
 
+@jax.jit
 def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
 
     h, hu, hv, z_b, z, n = state.h, state.hu, state.hv, state.z_b, state.z, state.n_b
@@ -601,7 +606,7 @@ def roe_solve_2D(state: RoeExnerState, dt: float, dx: float, mask: jax.Array):
         hv=hv_new,
     )
    
-#@jax.jit
+@jax.jit
 def exner_solver(si, sj, nx, ny, dx):
     # We will be implementing the Approximately Coupled Solver (ACM) https://doi.org/10.1016/j.advwatres.2021.103931
     hi, hui, hvi, z_bi, zi, gi = si
@@ -652,7 +657,7 @@ def exner_solver(si, sj, nx, ny, dx):
 
     return F_exner
 
-#@jax.jit
+@jax.jit
 def exner_solve_2D(state, dt, dx, mask):
     h, hu, hv, z_b, z, G = state.h, state.hu, state.hv, state.z_b, state.z, state.G
 

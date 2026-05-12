@@ -57,13 +57,6 @@ def run_driver(config_path: str):
     integrator = create_integrator_bundle(time_scheme)
     integrator_config = integrator.config(cfl, end_time, out_freq, solver, solver_config)
 
-    a = time.perf_counter()
-
     state = integrator.run_fn(state, integrator_config, pnetcdf_io, mesh, boundaries.boundary_mask)
-
-    b = time.perf_counter()
-
-    if mpi_handler.rank == 0:
-        print(f"Elapsed time: {b-a}")
 
     return state, (mesh.local_X, mesh.local_Y)

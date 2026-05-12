@@ -9,6 +9,8 @@ from typing import NamedTuple, Dict, Optional
 import jax
 import jax.numpy as jnp
 
+import time as timer
+
 def config_fn_forwardeuler(cfl, end_time, out_freq, solver_bundle, solver_config):
     return IntegratorConfig(
         cfl = cfl,
@@ -62,7 +64,10 @@ def run_fn_forwardeuler(state: BaseState, config: IntegratorConfig, io, mesh, b_
     rank = config.solver_config.mpi_handler.rank
         
     # Write initial condition
-    io.write_state(state, mesh, mask[0])
+    if io != None:
+        io.write_state(state, mesh, mask[0])
+    
+    a = timer.perf_counter()
     
     while time < config.end_time - TIMESTEP_TOL:
         simstate = SimState(
@@ -82,8 +87,6 @@ def run_fn_forwardeuler(state: BaseState, config: IntegratorConfig, io, mesh, b_
         
         dt = config.solver_bundle.compute_dt_fn(state, config.cfl, mask, config.solver_config)
         
-        io.write_state(state, mesh, mask[0])
-
         next_out_time = (int(time / config.out_freq) + 1) * config.out_freq
         next_target = min(next_out_time, config.end_time)
 
@@ -100,7 +103,8 @@ def run_fn_forwardeuler(state: BaseState, config: IntegratorConfig, io, mesh, b_
                 print(f"[Forward Euler] Iteration: {iters}  Time: {time:.6f}")
                 print(f"[Forward Euler] Timestep:  {dt:.9f}")
 
-            io.write_state(state, mesh, mask[0])
+            if io != None:
+                io.write_state(state, mesh, mask[0])
             
             if rank == 0:
                 print(f"[IO Writer] File: {numOut} written. Time: {time:.6f}")
@@ -108,7 +112,23 @@ def run_fn_forwardeuler(state: BaseState, config: IntegratorConfig, io, mesh, b_
             numOut += 1
         
         iters += 1
-        
+    
+    b = timer.perf_counter()
+    
+    if config.solver_config.mpi_handler.rank == 0: 
+        import hashlib
+        now = timer.time()
+
+        key = f"{dt:.10f}_{now:.6f}"
+        h = hashlib.sha256(key.encode()).hexdigest()[:12]
+
+        filename = f"timing_{h}.txt"
+    
+        with open(filename, "w") as f:
+            print(f"Time: {b-a}", file=f)
+
+
+
     return state
 
 
