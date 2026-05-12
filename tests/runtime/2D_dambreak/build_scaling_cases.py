@@ -77,6 +77,44 @@ MPI4JAX_USE_CUDA_MPI=1 srun -N {nodes} -n {gpus} --gpu-bind=closest --cpu-bind=c
     with open(os.path.join(output_dir, "distributed.slurm"), "w") as f:
         f.write(slurm_content)
 
+def generate_pbs(output_dir, parNx, parNy, job_name):
+    gpus = parNx * parNy
+    nodes = math.ceil(gpus / 4)  # adjust if Polaris differs
+    select = max(1, nodes)
+
+    gpus_per_node = 4 if gpus >= 4 else gpus
+
+    queue = "preemptable" if nodes <= 10 else "prod"
+
+    pbs_content = f"""#!/bin/bash
+#PBS -N {job_name}
+#PBS -A insitu
+#PBS -q {queue}
+#PBS -l walltime=00:30:00
+#PBS -l place=scatter
+#PBS -k doe
+#PBS -l select={select}:system=polaris
+#PBS -l filesystems=grand
+#PBS -o {job_name}.out
+#PBS -e {job_name}.err
+
+source ~/.bashrc
+source /lus/grand/projects/insitu/jkcenat/PyExner/machines/polaris.gpu
+export MPICH_GPU_SUPPORT_ENABLED=1
+
+cd $PBS_O_WORKDIR
+
+MPI4JAX_USE_CUDA_MPI=1 mpiexec -n {gpus} --ppn {gpus_per_node} ../../set_affinity.sh mamba run -n pyexner python ../../run.py ./input.yaml
+"""
+    with open(os.path.join(output_dir, "distributed.pbs"), "w") as f:
+        f.write(pbs_content)
+
+def generate_job_script(output_dir, parNx, parNy, job_name, system="slurm"):
+    if system == "slurm":
+        return generate_slurm(output_dir, parNx, parNy, job_name)
+    elif system == "pbs":
+        return generate_pbs(output_dir, parNx, parNy, job_name)
+
 def generate_case(output_dir, Lx, Ly, dh, parNx, parNy, end_time=1.0, grass_factor=0.005, job_name="test_multi_node"):
     os.makedirs(output_dir, exist_ok=True)
     
@@ -94,14 +132,15 @@ def generate_case(output_dir, Lx, Ly, dh, parNx, parNy, end_time=1.0, grass_fact
     # 2. Write input.yaml
     config = {
         "end_time": end_time,
-        "out_freq": 0.1,
-        "io_freq": 0.1,
+        "out_freq": end_time+1,
+        "io_freq": end_time+1,
         "cfl": 0.5,
         "flux_scheme": "Roe Exner",
         "integrator": "Forward Euler",
         "parNx": parNx,
         "parNy": parNy,
-        "initial_conditions": "input.nc",
+        "input_file": "input.nc",
+        "output_file": "output.nc",
         "erosion": {
             "grass_factor": grass_factor
         },
@@ -112,7 +151,7 @@ def generate_case(output_dir, Lx, Ly, dh, parNx, parNy, end_time=1.0, grass_fact
         yaml.dump(config, f, sort_keys=False, default_flow_style=None)
 
     # 3. Write distributed.slurm
-    generate_slurm(output_dir, parNx, parNy, job_name)
+    generate_job_script(output_dir, parNx, parNy, job_name, system="pbs")
 
 
 if __name__ == "__main__":
@@ -138,8 +177,8 @@ if __name__ == "__main__":
     # Target: keep global domain fixed.
     # We choose Lx = 200.0, Ly = 200.0 so total domain is 400x400 with dh=0.1
     # This means total grid is 4000x4000 = 16M cells.
-    strong_scaling_Lx = 200.0
-    strong_scaling_Ly = 200.0
+    strong_scaling_Lx = 400.0
+    strong_scaling_Ly = 400.0
 
     slurm_dirs = []
 

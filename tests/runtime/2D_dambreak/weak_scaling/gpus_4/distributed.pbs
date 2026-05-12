@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -N weak_4
+#PBS -A insitu
+#PBS -q preemptable
+#PBS -l walltime=00:30:00
+#PBS -l place=scatter
+#PBS -k doe
+#PBS -l select=1:system=polaris
+#PBS -l filesystems=grand
+#PBS -o weak_4.out
+#PBS -e weak_4.err
+
+source ~/.bashrc
+source /lus/grand/projects/insitu/jkcenat/PyExner/machines/polaris.gpu
+export MPICH_GPU_SUPPORT_ENABLED=1
+
+cd $PBS_O_WORKDIR
+
+MPI4JAX_USE_CUDA_MPI=1 mpiexec -n 4 --ppn 4 ../../set_affinity.sh mamba run -n pyexner python ../../run.py ./input.yaml

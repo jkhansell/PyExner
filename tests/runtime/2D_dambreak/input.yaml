@@ -1,12 +1,17 @@
 end_time: 1
-out_freq: 0.1
-io_freq: 0.1
+out_freq: 1.1
+io_freq: 1.1
 cfl: 0.5
 flux_scheme: Roe Exner
 integrator: Forward Euler
 parNx: 1
-parNy: 1
+parNy: 4
 initial_conditions: input.nc
+Lx: 400
+dh: 0.1
+
+erosion: 
+  grass_factor: 0.01
 
 boundaries:
 

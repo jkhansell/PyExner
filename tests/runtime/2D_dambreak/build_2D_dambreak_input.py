@@ -18,12 +18,14 @@ def symmetrical_dambreak_exner_2D(Lx, Ly, dh):
     u = np.zeros_like(h)
     v = np.zeros_like(h)
     z = np.ones_like(h)
+    z_b = np.ones_like(h)
     
     ds = xr.Dataset(
         {
             "h": (["y", "x"], h.astype(np.float32)),
             "hu": (["y", "x"], (h*u).astype(np.float32)),
             "hv": (["y", "x"], (h*v).astype(np.float32)),
+            "z_b": (["y", "x"], z_b.astype(np.float32)),
             "z": (["y", "x"], z.astype(np.float32)),
             "n": (["y", "x"], n.astype(np.float32)),
         },
