@@ -2,7 +2,6 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import plotly.graph_objects as go
 import os
 
 """
@@ -351,15 +350,15 @@ def plot_images():
         x_sl = slice(-2.1, 11.9)
         y_sl = slice(1.8, -1.8)
 
-        G = data.G[i]#.sel(x=x_sl, y=y_sl)
-        h = data.h[i]#.sel(x=x_sl, y=y_sl)
-        z = data.z[i]#.sel(x=x_sl, y=y_sl)
-        z_b = data.z_b[i]#.sel(x=x_sl, y=y_sl)
+        G = data.G[i].sel(x=x_sl, y=y_sl)
+        h = data.h[i].sel(x=x_sl, y=y_sl)
+        z = data.z[i].sel(x=x_sl, y=y_sl)
+        z_b = data.z_b[i].sel(x=x_sl, y=y_sl)
 
         eps = 1e-12
 
-        u = data.hu[i]#.sel(x=x_sl, y=y_sl) / (h + eps)
-        v = data.hv[i]#.sel(x=x_sl, y=y_sl) / (h + eps)
+        u = data.hu[i].sel(x=x_sl, y=y_sl) / (h + eps)
+        v = data.hv[i].sel(x=x_sl, y=y_sl) / (h + eps)
 
         umag = np.sqrt(u**2 + v**2)
 
@@ -459,9 +458,9 @@ def plot_images():
 
 if __name__ == "__main__":
 
-    #plot_line_profiles()
+    plot_line_profiles()
 
-    #plot_time_series()
+    plot_time_series()
 
     plot_images()
 

@@ -3,7 +3,7 @@ out_freq: 23.0
 cfl: 0.5
 flux_scheme: Roe Exner
 integrator: Forward Euler
-parNx: 4
+parNx: 1
 parNy: 1
 input_file: erodible_channel.nc
 output_file: erodible_channel_out.nc
