@@ -7,12 +7,14 @@ from netCDF4 import Dataset
 import os
 import imageio
 
+
 # results folder
 folder = 'results'
 os.makedirs(folder, exist_ok=True)
 
 # Monte Carlo runs
-num_runs = 15
+USE_MC = False
+num_runs = 1 if USE_MC else 0
 datasets = [] # dataset for runs
 
 # dataset[0] is for 'exact' simulation
@@ -21,10 +23,11 @@ data = xr.open_dataset(xr.backends.NetCDF4DataStore(ds))
 datasets.append(data) 
 
 # from dataset[1] to num_runs are the Monte Carlo runs
-for i in range(num_runs):
-    ds = Dataset(f"run_{i+1}/L_domain_out_{i+1}.nc")
-    data = xr.open_dataset(xr.backends.NetCDF4DataStore(ds))
-    datasets.append(data)
+if USE_MC:
+    for i in range(num_runs):
+        ds = Dataset(f"run_{i+1}/L_domain_out_{i+1}.nc")
+        data = xr.open_dataset(xr.backends.NetCDF4DataStore(ds))
+        datasets.append(data)
 
 
 # time stepping parameters (modify dt or t_max to change simulation window)
@@ -147,7 +150,7 @@ for j, data in enumerate(datasets):
                 color='blue', 
                 zorder=10 
             )
-        else: 
+        elif USE_MC: 
             # monte carlo runs
             ax.plot(
                 time_array_cut,
@@ -162,7 +165,7 @@ for j, data in enumerate(datasets):
 # compute and plot uncertainty band
 for i, name in enumerate(points.keys()):
     ax = axes[i]
-    if all_runs_eta[name]:
+    if USE_MC and all_runs_eta[name]:
         runs_matrix = np.array(all_runs_eta[name])
         eta_min = np.min(runs_matrix, axis=0)
         eta_max = np.max(runs_matrix, axis=0)
@@ -253,7 +256,7 @@ for j, data in enumerate(datasets):
         if j == 0:
             # main simulation
             ax.plot(y_vals, z_sim, color='blue', linewidth=2, label="Simulación", zorder=10)
-        else:
+        elif USE_MC:
             # monte carlo runs
             ax.plot(y_vals, z_sim, color='skyblue', linewidth=0.8, alpha=0.3, 
                     label="Monte Carlo" if j == 1 else None)
@@ -262,7 +265,7 @@ for j, data in enumerate(datasets):
 # plot uncertainty band
 for i, name in enumerate(lines.keys()):
     ax = axes[i]
-    if all_runs_zb[name]:
+    if USE_MC and all_runs_zb[name]:
         y_vals = datasets[0].y.values
         runs_matrix = np.array(all_runs_zb[name])
         z_min = np.min(runs_matrix, axis=0)
@@ -382,7 +385,7 @@ df_all = pd.DataFrame(all_results)
 file_path = os.path.join(folder, "metrics_all.csv")
 df_all.to_csv(file_path, index=False)
 
-################## Time behavior ##################
+################# Time behavior ##################
 ## dambreak_h_z_Fr
 # define gravity
 g = 9.81
