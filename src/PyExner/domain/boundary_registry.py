@@ -22,7 +22,7 @@ def point_in_polygon(point, polygon):
     xi, yi = polygon[:, 0], polygon[:, 1]
     xj, yj = jnp.roll(xi, 1), jnp.roll(yi, 1)
 
-    denom = jnp.where(jnp.abs(yj - yi) < 1e-14, 1e-14, yj - yi)
+    denom = jnp.where(jnp.abs(yj - yi) < 1e-6, 1e-6, yj - yi)
     test_x = (xj - xi) * (y - yi) / denom + xi
     intersect = ((yi > y) != (yj > y)) & (x < test_x)
 

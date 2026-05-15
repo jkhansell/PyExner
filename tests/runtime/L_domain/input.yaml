@@ -32,13 +32,26 @@ boundaries:
     values: [NaN, NaN, NaN, NaN]
     normal: [-1.0, 0.0] 
 
+# =========================
+  # RIGHT OUTFLOW (Shifted left to capture x=5.995)
+  # =========================
   right:
     type: Transmissive
     polygon:
-      - [5.9950, 0.0000]
-      - [6.0000, 0.0000]
-      - [6.0000, 0.5000]
-      - [5.9950, 0.5000]
+      - [5.990, -0.010]
+      - [6.010, -0.010]
+      - [6.010,  0.510]
+      - [5.990,  0.510]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [1.0, 0.0]
+
+  right_bed:
+    type: TransmissiveBed
+    polygon:
+      - [5.990, -0.010]
+      - [6.010, -0.010]
+      - [6.010,  0.510]
+      - [5.990,  0.510]
     values: [NaN, NaN, NaN, NaN]
     normal: [1.0, 0.0]
 
@@ -54,7 +67,7 @@ boundaries:
 
   top_narrow:
     type: Reflective
-    polygon:
+    polygon:  
       - [0.0000, 0.2450]
       - [3.9950, 0.2450]
       - [3.9950, 0.2550]
