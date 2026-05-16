@@ -1,5 +1,5 @@
 run: 1
-h_val: 0.585
-z_val: 0.075
+h_val: 0.59
+z_val: 0.072
 diameter: 0.00169
 porosity: 0.44

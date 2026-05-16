@@ -31,7 +31,7 @@ if USE_MC:
 
 
 # time stepping parameters (modify dt or t_max to change simulation window)
-dt = 0.5
+dt = 0.1
 t_max = 20.0 # for analysis
 
 ################## Points and sections of interest ##################

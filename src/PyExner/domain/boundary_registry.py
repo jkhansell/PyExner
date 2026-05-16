@@ -22,9 +22,24 @@ def point_in_polygon(point, polygon):
     xi, yi = polygon[:, 0], polygon[:, 1]
     xj, yj = jnp.roll(xi, 1), jnp.roll(yi, 1)
 
-    denom = jnp.where(jnp.abs(yj - yi) < 1e-6, 1e-6, yj - yi)
-    test_x = (xj - xi) * (y - yi) / denom + xi
-    intersect = ((yi > y) != (yj > y)) & (x < test_x)
+    # 1. Does the horizontal ray cross the Y-bounds of the edge?
+    # Using half-open intervals (yi > y) != (yj > y) prevents double-counting vertices.
+    # Crucially, if the edge is perfectly horizontal (yi == yj), this evaluates to False.
+    crosses_y = (yi > y) != (yj > y)
+
+    # 2. Safe Division
+    # We only care about computing test_x if crosses_y is True.
+    # If crosses_y is False, the edge might be horizontal (denom=0). 
+    # We swap 0s with 1s to prevent JAX from generating silent NaNs during evaluation.
+    denom = yj - yi
+    safe_denom = jnp.where(crosses_y, denom, 1.0) 
+
+    # 3. Compute X intersection
+    test_x = xi + (xj - xi) * (y - yi) / safe_denom
+
+    # 4. Check intersection with a tiny floating-point tolerance
+    # We use <= instead of <, and add 1e-8 to catch points sitting exactly on the line
+    intersect = crosses_y & (x <= test_x + 1e-8)
 
     return jnp.sum(intersect) % 2 == 1
 

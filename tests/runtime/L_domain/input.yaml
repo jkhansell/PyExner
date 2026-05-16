@@ -1,5 +1,5 @@
 end_time: 30.0
-out_freq: 0.5
+out_freq: 0.1
 cfl: 0.5
 flux_scheme: Roe Exner
 integrator: Forward Euler
@@ -19,7 +19,6 @@ erosion:
       deposition_flux: 0.01
       erosion_flux: 0.04
 
-      
 boundaries:
 
   left:

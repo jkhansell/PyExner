@@ -53,8 +53,8 @@ def momentum_corrections(state, mask):
     active = (hc > DRY_TOL) & ~m[C]
 
     # --- masked momentum (branchless) ---
-    hu_new = state.hu[C] * (active & ~stop_u)
-    hv_new = state.hv[C] * (active & ~stop_v)
+    hu_new =jnp.where(active & ~stop_u, state.hu[C], 0.0)
+    hv_new =jnp.where(active & ~stop_v, state.hv[C], 0.0)
 
     return state.replace(
         hu=state.hu.at[C].set(hu_new),

@@ -107,7 +107,7 @@ boundaries:
       - 3.82
     - - 6.23
       - 3.82
-    type: Transmissive
+    type: SteepFall
     values:
     - NaN
     - NaN
