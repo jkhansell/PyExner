@@ -211,3 +211,8 @@ __marimo__/
 *.nc
 tests/*/*/*.png
 
+tests/runtime/*/results/*
+tests/runtime/*/results/*/*
+tests/runtime/*/plots
+tests/runtime/*/timing_*
+

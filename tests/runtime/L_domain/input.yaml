@@ -42,6 +42,16 @@ boundaries:
     values: [NaN, NaN, NaN, NaN]
     normal: [1.0, 0.0]
 
+  right_bed:
+    type: TransmissiveBed
+    polygon:
+      - [5.9950, 0.0000]
+      - [6.0000, 0.0000]
+      - [6.0000, 0.5000]
+      - [5.9950, 0.5000]
+    values: [NaN, NaN, NaN, NaN]
+    normal: [1.0, 0.0]
+
   bottom:
     type: Reflective
     polygon:
