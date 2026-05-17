@@ -22,9 +22,24 @@ def point_in_polygon(point, polygon):
     xi, yi = polygon[:, 0], polygon[:, 1]
     xj, yj = jnp.roll(xi, 1), jnp.roll(yi, 1)
 
-    denom = jnp.where(jnp.abs(yj - yi) < 1e-14, 1e-14, yj - yi)
-    test_x = (xj - xi) * (y - yi) / denom + xi
-    intersect = ((yi > y) != (yj > y)) & (x < test_x)
+    # 1. Does the horizontal ray cross the Y-bounds of the edge?
+    # Using half-open intervals (yi > y) != (yj > y) prevents double-counting vertices.
+    # Crucially, if the edge is perfectly horizontal (yi == yj), this evaluates to False.
+    crosses_y = (yi > y) != (yj > y)
+
+    # 2. Safe Division
+    # We only care about computing test_x if crosses_y is True.
+    # If crosses_y is False, the edge might be horizontal (denom=0). 
+    # We swap 0s with 1s to prevent JAX from generating silent NaNs during evaluation.
+    denom = yj - yi
+    safe_denom = jnp.where(crosses_y, denom, 1.0) 
+
+    # 3. Compute X intersection
+    test_x = xi + (xj - xi) * (y - yi) / safe_denom
+
+    # 4. Check intersection with a tiny floating-point tolerance
+    # We use <= instead of <, and add 1e-8 to catch points sitting exactly on the line
+    intersect = crosses_y & (x <= test_x + 1e-8)
 
     return jnp.sum(intersect) % 2 == 1
 
@@ -59,7 +74,7 @@ def compute_reflective_indices(mask: jnp.ndarray, normal: jnp.ndarray):
     interior_cells = (boundary_cells + shift).astype(jnp.int32)
 
     Ny, Nx = mask.shape
-    interior_cells = jnp.clip(interior_cells, a_min=0, a_max=jnp.array([Ny - 1, Nx - 1]))
+    interior_cells = jnp.clip(interior_cells, min=0, max=jnp.array([Ny - 1, Nx - 1]))
 
     by, bx = boundary_cells[:, 0], boundary_cells[:, 1]
     iy, ix = interior_cells[:, 0], interior_cells[:, 1]
@@ -117,20 +132,36 @@ class BoundaryManager:
         # Instantiate handler objects
         for i, key in enumerate(self.boundary_specs.keys()):
             btype = self.flux_scheme+" "+self.boundary_specs[key]["type"]
+            print(f"Registered Boundary: {btype}")
             normal = normals[i]
             mask = masks[i] 
 
             try:
                 handler_cls = BOUNDARY_REGISTRY[btype]
-                if "Reflective" in btype or "Transmissive" in btype:
+                      
+                if "Reflective" in btype or "Transmissive" in btype or "SteepFall" in btype:
                     b_idx, i_idx = compute_reflective_indices(mask, normal)
-                    
                     handler = handler_cls(
                         mask=mask,
                         normal=normal,
                         boundary_indices=b_idx,
                         interior_indices=i_idx,
                     )
+
+                elif ("ConstantInflux" in btype or 
+                      "ConstantOutflux" in btype or 
+                      "NormalFlowDepth" in btype or 
+                      "Berthon" in btype
+                    ):
+                    b_idx, i_idx = compute_reflective_indices(mask, normal)
+                    handler = handler_cls(
+                        mask=mask,
+                        normal=normal,
+                        values=boundary_values[i],
+                        boundary_indices=b_idx,
+                        interior_indices=i_idx,
+                    )
+
                 else:
                     handler = handler_cls(
                         mask=mask,

@@ -18,21 +18,16 @@ class RoeExner_ZeroMomentumBoundary:
         Sets hu and hv to zero (or values from `self.values`) at the boundary.
         Leaves h, z, G, n untouched.
         """
-        hu_val = self.values[1]  # typically 0.0
-        hv_val = self.values[2]
+        hu_val = self.values[1] * self.normal[0]  # typically 0.0
+        hv_val = self.values[1] * self.normal[1]
 
         # Use the mask directly
         hu_new = jnp.where(self.mask, jnp.where(jnp.isnan(hu_val), state.hu, hu_val), state.hu)
         hv_new = jnp.where(self.mask, jnp.where(jnp.isnan(hv_val), state.hv, hv_val), state.hv)
 
-        return RoeExnerState(
-            h=state.h,
+        return state.replace(
             hu=hu_new,
             hv=hv_new,
-            z=state.z,
-            n=state.n,
-            G=state.G,
-            seds=state.seds
         )
 
 

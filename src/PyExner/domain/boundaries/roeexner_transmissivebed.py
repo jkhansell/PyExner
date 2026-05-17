@@ -6,9 +6,9 @@ from typing import Tuple
 from PyExner.domain.boundary_registry import register_boundary
 from PyExner. state. roe_exner_state import RoeExnerState
 
-@register_boundary("Roe Exner Transmissive")
+@register_boundary("Roe Exner TransmissiveBed")
 @dataclass
-class RoeExner_TransmissiveBoundary:
+class RoeExner_TransmissiveBedBoundary:
     mask: jax.Array
     normal: jax.Array                 # [nx, ny]
     interior_indices: Tuple[jax.Array, jax.Array]
@@ -19,27 +19,23 @@ class RoeExner_TransmissiveBoundary:
         iy, ix = self.interior_indices
         nx, ny = self.normal
 
-        h  = state.h[iy, ix]
-        hu = state.hu[iy, ix]
-        hv = state.hv[iy, ix]
+        z_b  = state.z_b[iy, ix]
         # normal / tangential velocity
         
         return state.replace(
-            h  = state.h.at[by, bx].set(h),
-            hu = state.hu.at[by, bx].set(hu),
-            hv = state.hv.at[by, bx].set(hv),
+            z_b = state.z_b.at[by, bx].set(z_b)
         )
 
 
-def RoeExner_TransmissiveBoundary_flatten(b: RoeExner_TransmissiveBoundary):
+def RoeExner_TransmissiveBedBoundary_flatten(b: RoeExner_TransmissiveBedBoundary):
     children = (b.mask, b.normal, b.interior_indices, b.boundary_indices)
     return children, None
 
-def RoeExner_TransmissiveBoundary_unflatten(aux, children):
-    return RoeExner_TransmissiveBoundary(*children)
+def RoeExner_TransmissiveBedBoundary_unflatten(aux, children):
+    return RoeExner_TransmissiveBedBoundary(*children)
 
 jax.tree_util.register_pytree_node(
-    RoeExner_TransmissiveBoundary,
-    RoeExner_TransmissiveBoundary_flatten,
-    RoeExner_TransmissiveBoundary_unflatten
+    RoeExner_TransmissiveBedBoundary,
+    RoeExner_TransmissiveBedBoundary_flatten,
+    RoeExner_TransmissiveBedBoundary_unflatten
 )
