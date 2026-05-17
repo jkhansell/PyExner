@@ -140,13 +140,23 @@ water_actor = plotter.add_mesh(
 # CAMERA
 # =============================================================================
 
+center = (5.0,0.0, 0.0)   # focal point (channel center)
+r = 25.0                   # camera distance
+
+az = np.deg2rad(45.0)      # azimuth in XY plane
+el = np.deg2rad(30.0)      # elevation above plane
+
+cam_x = center[0] + r * np.cos(el) * np.cos(az)
+cam_y = center[1] + r * np.cos(el) * np.sin(az)
+cam_z = center[2] + r * np.sin(el)
+
 plotter.camera_position = [
-    (16.0, -16.5, 15),
-    (-8.0, 10.5, -15),
-    (0.0, 0.0, 1.0)
+    (cam_x, cam_y, cam_z),  # camera
+    center,                 # focal point
+    (0.0, 0.0, 1.0)         # Z is up
 ]
 
-plotter.camera.zoom(2.1)
+plotter.camera.zoom(1.6)
 
 
 # =============================================================================
