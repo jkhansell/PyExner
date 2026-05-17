@@ -34,6 +34,8 @@ def get_mask(state, mpi_handler, b_mask):
     if coords[1] == dims[1] - 1:
         mask = mask.at[:, -1].set(True)
 
+    mask = jnp.where(b_mask, False, mask)
+
     return jnp.stack([mask, b_mask], axis=0)
 
 def config_fn_roeexner(state, mpi_handler, boundaries, dx, params):

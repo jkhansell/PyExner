@@ -429,10 +429,10 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     # Topographic source term (pressure gradient due to bed slope)
     # This is a specific well-balanced formulation.
     #thrust = -g * htilde * dz
-    thrust_a = -g * htilde * dz
+    thrust = -g * htilde * dz
 
     # Alternative thrust calculation for specific dry/wet conditions
-    mask1_dz = (dz >= 0) & (di < zj+z_bj)
+    """mask1_dz = (dz >= 0) & (di < zj+z_bj)
     mask2_dz = (dz < 0) & (dj < zi+z_bi)
     
     dztilde = jnp.where(mask1_dz, hi, jnp.where(mask2_dz, hj, dz))
@@ -448,7 +448,7 @@ def roe_solver(si, sj, nx: float, ny: float, dx: float):
     thrust = jnp.where(mask_thrust, jnp.maximum(thrust_a, thrust_b), thrust_b)
     
     both_dry = (hi < DRY_TOL) & (hj < DRY_TOL)
-    thrust = jnp.where(both_dry, 0.0, thrust)
+    thrust = jnp.where(both_dry, 0.0, thrust)"""
 
     # friction
 
@@ -694,8 +694,11 @@ def exner_solve_2D(state, dt, dx, mask):
     stop_y = nodata_mask_y | ((s1_y[3] < SED_TOL) & (s2_y[3] < SED_TOL)) 
 
     # Dry bed logic: If both cells are dry, sediment flux is zero
-    active_x = (s1_x[0] > DRY_TOL) | (s2_x[0] > DRY_TOL) | ~stop_x 
-    active_y = (s1_y[0] > DRY_TOL) | (s2_y[0] > DRY_TOL) | ~stop_y
+    depth_mask_x = (s1_x[0] > DRY_TOL) | (s2_x[0] > DRY_TOL)
+    depth_mask_y = (s1_y[0] > DRY_TOL) | (s2_y[0] > DRY_TOL)
+
+    active_x = depth_mask_x & ~stop_x 
+    active_y = depth_mask_y & ~stop_y
 
     # Apply corrections
     F_x = jnp.where(active_x, F_x, 0.0)
